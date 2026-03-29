@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { supabase, TABLES } from '../lib/supabase'
+import { Link } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
 import { 
   ExclamationTriangleIcon, CalendarIcon, 
   ClipboardDocumentListIcon, UserGroupIcon
@@ -12,7 +13,6 @@ export default function Dashboard() {
     pendingTasks: 0,
     timeOffRequests: 0
   })
-  const [recentAlerts, setRecentAlerts] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -23,7 +23,7 @@ export default function Dashboard() {
     try {
       // Get low stock count
       const { data: inventory } = await supabase
-        .from(TABLES.INVENTORY)
+        .from('inventory_items')
         .select('quantity, threshold')
       
       const lowStockCount = inventory?.filter(item => item.quantity <= item.threshold).length || 0
@@ -31,27 +31,22 @@ export default function Dashboard() {
       // Get today's shifts
       const today = new Date().toISOString().split('T')[0]
       const { data: shifts } = await supabase
-        .from(TABLES.SHIFTS)
-        .select('*, profiles(full_name)')
+        .from('shifts')
+        .select('*')
         .eq('date', today)
 
       // Get pending time off
       const { data: timeOff } = await supabase
-        .from(TABLES.TIME_OFF)
+        .from('time_off_requests')
         .select('*')
         .eq('status', 'pending')
 
       setStats({
         lowStock: lowStockCount,
         todayShifts: shifts?.length || 0,
-        pendingTasks: 3, // Placeholder
+        pendingTasks: 3,
         timeOffRequests: timeOff?.length || 0
       })
-
-      // Get low stock items for alerts
-      const lowItems = inventory?.filter(item => item.quantity <= item.threshold).slice(0, 4)
-      setRecentAlerts(lowItems || [])
-
     } catch (err) {
       console.error('Error loading dashboard:', err)
     } finally {
@@ -122,48 +117,22 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Alerts Section */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Low Stock Alerts */}
-        <div className="card">
-          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-            <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />
-            Low Stock Alerts
-          </h2>
-          {recentAlerts.length > 0 ? (
-            <div className="space-y-3">
-              {recentAlerts.map((item, idx) => (
-                <div key={idx} className="flex justify-between items-center p-3 bg-red-500/10 rounded-lg border border-red-500/30">
-                  <span>{item.name || 'Unknown Item'}</span>
-                  <span className="badge badge-critical">{item.quantity} left</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-400">All inventory is well-stocked! ✅</p>
-          )}
-          <a href="/inventory" className="btn-secondary block text-center mt-4">
-            View Inventory →
-          </a>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="card">
-          <h2 className="text-lg font-bold mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <a href="/inventory?action=add" className="btn-primary text-center">
-              + Add Item
-            </a>
-            <a href="/schedule?action=add" className="btn-primary text-center">
-              + Add Shift
-            </a>
-            <a href="/checklists" className="btn-secondary text-center">
-              View Checklists
-            </a>
-            <a href="/timeoff" className="btn-secondary text-center">
-              Time Off Requests
-            </a>
-          </div>
+      {/* Quick Actions */}
+      <div className="card">
+        <h2 className="text-lg font-bold mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <Link to="/inventory" className="btn-primary text-center">
+            + Add Item
+          </Link>
+          <Link to="/schedule" className="btn-primary text-center">
+            + Add Shift
+          </Link>
+          <Link to="/checklists" className="btn-secondary text-center">
+            View Checklists
+          </Link>
+          <Link to="/timeoff" className="btn-secondary text-center">
+            Time Off Requests
+          </Link>
         </div>
       </div>
     </div>

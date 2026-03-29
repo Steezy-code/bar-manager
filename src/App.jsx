@@ -9,23 +9,36 @@ import Checklists from './pages/Checklists'
 import TimeOff from './pages/TimeOff'
 import Settings from './pages/Settings'
 import Layout from './components/Layout'
+import PendingApproval from './pages/PendingApproval'
 
 function App() {
   const [session, setSession] = useState(null)
+  const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setLoading(false)
-    })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-    })
-
-    return () => subscription.unsubscribe()
+    checkUser()
   }, [])
+
+  const checkUser = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      setSession(session)
+      
+      if (session) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single()
+        setProfile(profile)
+      }
+    } catch (err) {
+      console.error('Error checking user:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -35,11 +48,20 @@ function App() {
     )
   }
 
+  if (!session) {
+    return <Login />
+  }
+
+  // Check if user is approved
+  if (profile && !profile.approved) {
+    return <PendingApproval />
+  }
+
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={session ? <Navigate to="/" /> : <Login />} />
-        <Route path="/" element={session ? <Layout /> : <Navigate to="/login" />}>
+        <Route path="/login" element={<Navigate to="/" />} />
+        <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="inventory" element={<Inventory />} />
           <Route path="schedule" element={<Schedule />} />
@@ -47,6 +69,7 @@ function App() {
           <Route path="timeoff" element={<TimeOff />} />
           <Route path="settings" element={<Settings />} />
         </Route>
+        <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
   )

@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
-import { supabase, TABLES } from '../lib/supabase'
-import { TrashIcon, UserPlusIcon } from '@heroicons/react/24/outline'
+import { supabase } from '../lib/supabase'
+import { TrashIcon, UserPlusIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
 
 export default function Settings() {
   const [profiles, setProfiles] = useState([])
   const [loading, setLoading] = useState(true)
-  const [showAddModal, setShowAddModal] = useState(false)
 
   useEffect(() => {
     loadProfiles()
@@ -14,7 +13,7 @@ export default function Settings() {
   const loadProfiles = async () => {
     try {
       const { data, error } = await supabase
-        .from(TABLES.PROFILES)
+        .from('profiles')
         .select('*')
         .order('created_at')
       
@@ -30,7 +29,7 @@ export default function Settings() {
   const updateRole = async (id, role) => {
     try {
       await supabase
-        .from(TABLES.PROFILES)
+        .from('profiles')
         .update({ role })
         .eq('id', id)
       
@@ -40,12 +39,25 @@ export default function Settings() {
     }
   }
 
+  const approveUser = async (id) => {
+    try {
+      await supabase
+        .from('profiles')
+        .update({ approved: true })
+        .eq('id', id)
+      
+      loadProfiles()
+    } catch (err) {
+      alert('Error approving user: ' + err.message)
+    }
+  }
+
   const deleteUser = async (id) => {
     if (!confirm('Are you sure you want to remove this user?')) return
     
     try {
       await supabase
-        .from(TABLES.PROFILES)
+        .from('profiles')
         .delete()
         .eq('id', id)
       
@@ -57,6 +69,9 @@ export default function Settings() {
 
   if (loading) return <div className="text-center py-20">Loading settings...</div>
 
+  const pendingUsers = profiles.filter(p => !p.approved)
+  const approvedUsers = profiles.filter(p => p.approved)
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -65,21 +80,52 @@ export default function Settings() {
         <p className="text-gray-400">Manage your team and preferences</p>
       </div>
 
+      {/* Pending Approvals */}
+      {pendingUsers.length > 0 && (
+        <div className="card border-yellow-500/50">
+          <h2 className="text-lg font-semibold mb-4 text-yellow-500">
+            ⏳ Pending Approvals ({pendingUsers.length})
+          </h2>
+          <p className="text-sm text-gray-400 mb-4">
+            These users have signed up but need approval before they can access the app.
+          </p>
+          
+          <div className="space-y-3">
+            {pendingUsers.map(profile => (
+              <div key={profile.id} className="flex items-center justify-between p-3 bg-bar-blue rounded-lg">
+                <div>
+                  <div className="font-semibold">{profile.full_name || 'Unnamed User'}</div>
+                  <div className="text-sm text-gray-400">{profile.email}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => approveUser(profile.id)}
+                    className="p-2 bg-green-600 rounded-lg hover:bg-green-700 flex items-center gap-1"
+                  >
+                    <CheckIcon className="w-4 h-4" />
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => deleteUser(profile.id)}
+                    className="p-2 text-red-500 hover:bg-red-500/20 rounded-lg"
+                  >
+                    <XMarkIcon className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Team Management */}
       <div className="card">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold">Team Members</h2>
-          <button 
-            onClick={() => setShowAddModal(true)} 
-            className="btn-primary flex items-center gap-2"
-          >
-            <UserPlusIcon className="w-5 h-5" />
-            Add Member
-          </button>
         </div>
 
         <div className="space-y-3">
-          {profiles.map(profile => (
+          {approvedUsers.map(profile => (
             <div key={profile.id} className="flex items-center justify-between p-3 bg-bar-blue rounded-lg">
               <div>
                 <div className="font-semibold">{profile.full_name || 'Unnamed User'}</div>
@@ -105,9 +151,9 @@ export default function Settings() {
           ))}
         </div>
 
-        {profiles.length === 0 && (
+        {approvedUsers.length === 0 && (
           <p className="text-gray-400 text-center py-4">
-            No team members yet. Add some to get started!
+            No approved team members yet.
           </p>
         )}
       </div>
@@ -116,39 +162,13 @@ export default function Settings() {
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">About BarManager</h2>
         <div className="text-gray-400 space-y-2">
-          <p>Version 1.0.0</p>
+          <p>Version 1.2.0</p>
           <p>Built with React + Supabase + Netlify</p>
           <p className="text-sm">
-            A free, open-source restaurant management tool.
-            <br />
-            Deploy your own at no cost!
+            Now with user approval system!
           </p>
         </div>
       </div>
-
-      {/* Add Member Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-bar-card rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Add Team Member</h2>
-            <div className="space-y-4">
-              <p className="text-gray-400 text-sm">
-                To add a new team member, have them create an account at the login page,
-                then you can update their role here.
-              </p>
-              <p className="text-gray-400 text-sm">
-                New users will appear in this list after signing up.
-              </p>
-              <button 
-                onClick={() => setShowAddModal(false)} 
-                className="btn-secondary w-full"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
