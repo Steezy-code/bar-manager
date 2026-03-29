@@ -15,6 +15,10 @@ export default function Schedule() {
   const [newShift, setNewShift] = useState({ name: '', day: 1, start: '16:00', end: '23:00' })
   const csvRef = useRef(null)
 
+  const printSchedule = () => {
+    window.print()
+  }
+
   const currentMonth = currentDate.getMonth()
   const currentYear = currentDate.getFullYear()
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -141,11 +145,12 @@ export default function Schedule() {
     <div className="space-y-6 pb-24 lg:pb-0">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Schedule</h1>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap print:hidden">
           <button onClick={() => csvRef.current.click()} className="btn-secondary text-sm">📥 Import</button>
           <button onClick={exportCSV} className="btn-secondary text-sm">📤 Export</button>
           <button onClick={() => setShowCopyWeek(true)} className="btn-secondary text-sm">📋 Copy Week</button>
           <button onClick={clearAll} className="btn-secondary text-sm text-red-400">🗑️ Clear</button>
+          <button onClick={printSchedule} className="btn-secondary text-sm">🖨️ Print</button>
           <button onClick={() => setView(view === 'week' ? 'month' : 'week')} className="btn-primary">
             {view === 'week' ? '📅 Month' : '📅 Week'}
           </button>

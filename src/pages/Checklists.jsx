@@ -17,6 +17,10 @@ export default function Checklists() {
   const [showNew, setShowNew] = useState(false)
   const [newL, setNewL] = useState('')
 
+  const printChecklist = () => {
+    window.print()
+  }
+
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) setTasks(JSON.parse(saved))
@@ -37,7 +41,7 @@ export default function Checklists() {
 
   return (
     <div className="space-y-6 pb-24 lg:pb-0">
-      <div className="flex justify-between"><h1 className="text-2xl font-bold">Checklists</h1><button onClick={() => setShowNew(true)} className="btn-secondary">+ New List</button></div>
+      <div className="flex justify-between items-center"><h1 className="text-2xl font-bold">Checklists</h1><div className="flex gap-2"><button onClick={printChecklist} className="btn-secondary">🖨️ Print</button><button onClick={() => setShowNew(true)} className="btn-secondary">+ New List</button></div></div>
       <div className="flex gap-2 overflow-x-auto">{Object.keys(tasks).map(t => <button key={t} onClick={() => setList(t)} className={`px-4 py-2 rounded-lg ${list===t?'bg-bar-accent':'bg-bar-card'}`}>{t}</button>)}</div>
       <div className="card">
         <div className="flex justify-between mb-4"><h2 className="text-lg font-semibold capitalize">{list}</h2><button onClick={() => setEdit(!edit)} className="btn-secondary text-sm">{edit?'Done':'Edit'}</button></div>

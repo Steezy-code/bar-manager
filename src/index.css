@@ -8,6 +8,37 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
 }
 
+/* Print Styles */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+  .card, .bg-bar-card, .bg-bar-blue, .bg-bar-blue\/30, .bg-bar-blue\/20 {
+    background: white !important;
+    border: 1px solid #ccc !important;
+  }
+  .text-white, .text-gray-400, .text-gray-300 {
+    color: black !important;
+  }
+  .btn-primary, .btn-secondary {
+    display: none !important;
+  }
+  input, select {
+    display: none !important;
+  }
+  .grid-cols-7 {
+    grid-template-columns: repeat(7, 1fr) !important;
+  }
+  .min-h-\[80px\], .min-h-\[150px\] {
+    min-height: 60px !important;
+    background: #f5f5f5 !important;
+  }
+}
+
 @layer components {
   .btn-primary {
     @apply bg-bar-accent text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-600 transition;
