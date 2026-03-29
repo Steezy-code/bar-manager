@@ -52,7 +52,6 @@ function App() {
     return <Login />
   }
 
-  // Check if user is approved
   if (profile && !profile.approved) {
     return <PendingApproval />
   }
@@ -61,13 +60,13 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Navigate to="/" />} />
-        <Route path="/" element={<Layout />}>
+        <Route path="/" element={<Layout userRole={profile?.role} />}>
           <Route index element={<Dashboard />} />
           <Route path="inventory" element={<Inventory />} />
           <Route path="schedule" element={<Schedule />} />
           <Route path="checklists" element={<Checklists />} />
           <Route path="timeoff" element={<TimeOff />} />
-          <Route path="settings" element={<Settings />} />
+          <Route path="settings" element={<Settings currentUser={profile} />} />
         </Route>
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
