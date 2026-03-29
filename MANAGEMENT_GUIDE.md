@@ -72,6 +72,44 @@ BarManager is your all-in-one management hub for running your bar/restaurant. Th
 
 ---
 
+## How This Is Meant to Work (Intended Workflow)
+
+This app is designed as a **management tool** — you build the lists and schedules, then use them. Here's the intended flow:
+
+### 🖨️ The Print Workflow (Primary Use)
+1. **Build your schedule** — Add shifts for the week
+2. **Build your checklists** — Add tasks for opening/closing
+3. **Hit Print** — Use the print button to generate clean, ink-friendly paper copies
+4. **Hand them out** — Put the printed schedule where staff can see it, tape the checklist to the wall or POS station
+5. **Staff check off tasks** — They mark tasks complete by hand on the printed copy
+
+This replaces clipboard checklists and paper schedules. You create digitally → print → staff use on paper.
+
+### 📅 Weekly Setup (What You Do)
+| Day | Action |
+|-----|--------|
+| Sunday | Build next week's schedule in the app → Print it → Put on wall |
+| Daily | Check inventory, update quantities |
+| Before shift | Print opening checklist → Give to opening staff |
+| End of shift | Print closing checklist → Give to closing staff |
+
+### 🔄 The "Driver" Controls Everything
+- **You build** the lists in the app (schedule, checklists)
+- **You export** backups periodically (Settings → Export)
+- **You print** what you need
+- **Staff follow** the printed paper copies
+
+Staff don't need to log into the app daily — they use the printed papers you provide.
+
+### ❌ What's NOT Happening Here
+- Staff are NOT getting push notifications when you add a shift
+- Staff are NOT expected to check the app on their own
+- You are NOT automatically alerted when something is done
+
+**You are the driver.** You set it up, print it out, and hand it to them. That's the whole workflow.
+
+---
+
 ## Important Notes
 
 ### 🔔 About Notifications
