@@ -1,38 +1,17 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
 
-export default function Login() {
+export default function Login({ onLogin }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const navigate = useNavigate()
 
-  const handleLogin = async (e) => {
+  const handleLogin = (e) => {
     e.preventDefault()
     setLoading(true)
-    setError(null)
-
-    try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      })
-      
-      if (signInError) throw signInError
-      
-      navigate('/')
-    } catch (err) {
-      setError(err.message)
-      // Still allow login in demo mode
-      setTimeout(() => {
-        localStorage.setItem('demo_user', email)
-        navigate('/')
-      }, 1000)
-    } finally {
-      setLoading(false)
-    }
+    // Just accept any login
+    setTimeout(() => {
+      onLogin(email)
+    }, 500)
   }
 
   return (
@@ -45,43 +24,16 @@ export default function Login() {
 
         <div className="card p-6">
           <h2 className="text-xl font-bold mb-6 text-center">Sign In</h2>
-
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-sm text-gray-400 mb-1">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="input"
-                placeholder="you@bar.com"
-                required
-              />
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input" placeholder="you@bar.com" required />
             </div>
-
             <div>
               <label className="block text-sm text-gray-400 mb-1">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input"
-                placeholder="••••••••"
-                required
-              />
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input" placeholder="••••••••" required />
             </div>
-
-            {error && (
-              <div className="bg-red-500/20 border border-red-500 text-red-400 px-4 py-2 rounded-lg text-sm">
-                {error}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full py-3 disabled:opacity-50"
-            >
+            <button type="submit" disabled={loading} className="btn-primary w-full py-3 disabled:opacity-50">
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>

@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
 import { HomeIcon, CubeIcon, CalendarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, Cog6ToothIcon, ArrowRightOnRectangleIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
 
 const navItems = [
@@ -12,20 +11,13 @@ const navItems = [
   { name: 'Settings', path: '/settings', icon: Cog6ToothIcon },
 ]
 
-export default function Layout() {
+export default function Layout({ user, onLogout }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const navigate = useNavigate()
 
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut()
-      // Force a full page reload to clear state
-      window.location.href = '/login'
-    } catch (err) {
-      console.error('Logout error:', err)
-      // Fallback: just redirect anyway
-      window.location.href = '/login'
-    }
+  const handleLogout = () => {
+    onLogout()
+    navigate('/login')
   }
 
   return (
@@ -56,9 +48,9 @@ export default function Layout() {
           <h1 className="text-lg font-bold text-bar-accent">BarManager</h1>
           <div className="w-6" />
         </header>
-        <main className="p-4 pb-20 lg:p-8"><Outlet /></main>
+        <main className="p-4 pb-24 lg:p-8"><Outlet /></main>
       </div>
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bar-card border-t border-bar-blue flex justify-around py-3">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bar-card border-t border-bar-blue flex justify-around py-3 z-40">
         {navItems.slice(0, 5).map((item) => (
           <NavLink key={item.path} to={item.path} className={({ isActive }) => `flex flex-col items-center gap-1 ${isActive ? 'text-bar-accent' : 'text-gray-500'}`}>
             <item.icon className="w-5 h-5" /><span className="text-xs">{item.name}</span>
