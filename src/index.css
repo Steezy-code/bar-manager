@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #1a1a2e;
+  color: #eaeaea;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-bar-accent text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-600 transition;
+  }
+  .btn-secondary {
+    @apply bg-bar-blue text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition;
+  }
+  .card {
+    @apply bg-bar-card rounded-xl p-4 border border-bar-blue;
+  }
+  .input {
+    @apply bg-bar-blue border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-bar-accent focus:outline-none w-full;
+  }
+  .badge {
+    @apply px-2 py-1 rounded-full text-xs font-bold;
+  }
+  .badge-critical { @apply bg-red-500; }
+  .badge-warning { @apply bg-yellow-500; }
+  .badge-ok { @apply bg-green-500; }
+  .badge-pending { @apply bg-blue-500; }
+}
