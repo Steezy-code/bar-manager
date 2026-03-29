@@ -5,61 +5,69 @@
 
 ## What Is This App?
 
-BarManager helps you manage your bar/restaurant in 4 simple ways:
+BarManager is your all-in-one management hub for running your bar/restaurant. Think of it as your digital back-of-house — everything you need in one place, accessible right from your phone or browser.
+
+**No login required** — just open the link and you're in. It's designed to be simple.
 
 | Feature | What It Does |
 |---------|--------------|
-| 📦 **Inventory** | Track what you have in stock. Get alerts when things are running low. |
-| 📅 **Schedule** | See who's working this week. Managers can assign shifts. |
-| ✅ **Checklists** | Staff complete opening/closing tasks (like "brew coffee", "restock napkins") |
-| 🏝️ **Time Off** | Staff request days off. Managers approve or deny. |
+| 🏠 **Dashboard** | Your home base — overview of what's happening right now |
+| 📦 **Inventory** | Track stock, get alerts when items run low |
+| 📅 **Schedule** | See who's working, assign shifts, manage the team |
+| ✅ **Checklists** | Staff complete opening/closing tasks with timestamps |
+| 🏝️ **Time Off** | Staff request days off, you approve or deny |
+| ⚙️ **Settings** | Team management and app configuration |
 
 ---
 
 ## How Do I Access It?
 
 1. **Get the link** — Ask whoever set this up for the URL (looks like `something.netlify.app`)
-2. **Login** — Use the email/password you were given
-3. **That's it** — You're in!
+2. **Open it** — That's it. No login, no password. You're straight in.
+3. **On any device** — Works on phone, tablet, or desktop
 
 ---
 
-## What Do I Do Here?
+## What Does Each Section Do?
 
 ### 🏠 Dashboard (Home)
-- Shows a quick overview: who's working today, what's running low, pending requests
-- This is where you start every day
+- Today's overview at a glance
+- Quick stats: staff working today, low stock alerts, pending requests
+- This is where you start every day to see what's up
 
 ### 📦 Inventory
-- **To add an item:** Click "Add Item" → fill in name, category, quantity, threshold
-- **Threshold** = the number that triggers a low-stock alert (e.g., if threshold is 5 and you have 4, it turns red)
-- **To update quantity:** Just click on the number and type the new amount
-- Staff will see alerts when items hit threshold
+- **Add items:** Click "Add Item" → fill in name, category, quantity, threshold
+- **Threshold** = the number that triggers a low-stock alert
+  - Example: If threshold is 5 and you have 4, it turns red → time to restock
+- **Update quantities:** Just click the number and type the new amount
+- **Categories:** Drinks, food, supplies, cleaning — whatever makes sense for you
 
 ### 📅 Schedule
-- **To view:** Click any week to see shifts
-- **To add a shift:** Click "Add Shift" → pick employee, date, start/end time
-- **Colors mean:**
+- **View:** Click any week to see who's working
+- **Assign shifts:** Click "Add Shift" → pick employee, date, start/end time
+- **Roles shown by color:**
   - 🟢 Green = server
-  - 🔵 Blue = bartender
+  - 🔵 Blue = bartender  
   - 🟡 Yellow = manager
+- **At a glance:** See coverage for the whole week instantly
 
 ### ✅ Checklists
-- **Opening checklist:** Staff run through it before the bar opens
-- **Closing checklist:** Staff run through it before leaving
-- Managers can see which checklists were completed and by whom
-- Great for accountability — nobody can say "I forgot to lock up"
+- **Opening checklist:** Staff run through it before the bar opens (brew coffee, restock napkins, etc.)
+- **Closing checklist:** Staff run through it before locking up (count drawer, clean equipment, etc.)
+- **Timestamped:** You'll see exactly who completed what and when
+- **Accountability:** No more "I forgot" — it's all recorded
 
 ### 🏝️ Time Off
 - Staff submit requests with dates and reason
-- You get a notification
-- **To respond:** Click "Approve" or "Deny"
-- Approved requests show on the schedule as days off
+- **You get notified** (check the Time Off page)
+- **Approve or Deny** with one click
+- Approved requests automatically show on the schedule
 
 ### ⚙️ Settings (Team Management)
-- Add/remove staff
-- Change someone's role (staff ↔ manager)
-- Only managers can access this
+- View all team members
+- Add new staff
+- Change roles (staff ↔ manager)
+- Remove team members if needed
 
 ---
 
@@ -68,43 +76,71 @@ BarManager helps you manage your bar/restaurant in 4 simple ways:
 | Task | Who | How Often |
 |------|-----|------------|
 | Update inventory when stocked | Bar staff | Daily |
-| Complete opening/closing checklist | Opening/closing shift | Every shift |
-| Request time off | All staff | As needed |
+| Complete opening checklist | Opening shift | Every shift before opening |
+| Complete closing checklist | Closing shift | Every shift before leaving |
 | Check schedule | All staff | Daily |
+| Request time off | All staff | As needed |
+
+---
+
+## Why This Setup?
+
+**No login = fewer barriers**
+- Staff don't need another password to remember
+- Managers don't need to chase people to set up accounts
+- Just share the link and go
+
+**Management hub approach**
+- Everything in one place — no switching between apps
+- Works great on mobile for managers on the floor
+- Real-time updates — everyone sees the same info
+
+**Accountability baked in**
+- Checklist timestamps = proof tasks were done
+- Inventory tracking = know what to reorder
+- Shift logs = scheduling history
 
 ---
 
 ## Common Questions
 
-**Q: Can staff see other people's info?**
-A: No — staff can only see what they need to do (their shifts, their requests). Managers see everything.
+**Q: Can staff see everything?**
+A: Yes — but that's intentional for a small team. Everyone sees the schedule, inventory, and can complete checklists. It's a collaborative tool, not a hierarchical surveillance system.
 
-**Q: What happens if I delete a staff member?**
-A: Their shifts and requests stay but get disassociated. You can always re-add them.
+**Q: What happens if I delete a team member?**
+A: Their shifts and requests stay but get disassociated. You can always re-add them if they come back.
 
-**Q: Can I get reports on usage?**
-A: Not in this version yet — but you can export data from Supabase if needed.
+**Q: Can I export data?**
+A: Yes — the data lives in Supabase (the database). You can export from there if you need reports.
 
----
-
-## Need Help?
-
-If something's broken or you need changes:
-1. Check with your tech person (whoever set this up)
-2. Or restart — the app just reads from a database, can't really "break"
+**Q: Is this secure?**
+A: The app itself is open (no login), but the database has security rules. Only authorized team members could access the data backend if they had credentials.
 
 ---
 
 ## Summary for Management
 
-This tool replaces:
-- 📝 Paper schedules → digital, auto-updates
-- 📦 Spreadsheet inventory → automatic low-stock alerts
-- 📋 Clipboard checklists → digital with timestamps
-- ✉️ Slack/Text time-off requests → centralized in-app requests
+This tool replaces the old way of doing things:
 
-**Goal:** Less confusion, more accountability, smoother operations.
+| Old Way | New Way |
+|---------|---------|
+| 📝 Paper schedules or text threads | Digital schedule everyone sees |
+| 📦 Spreadsheet or memory inventory | Automatic low-stock alerts |
+| 📋 Clipboard checklists | Digital with timestamps + proof |
+| ✉️ Texts/Slack for time-off requests | In-app requests, one-click approve/deny |
+| 🔐 Multiple logins for every tool | One link, open and go |
+
+**Goal:** Less confusion, more accountability, smoother day-to-day operations — without the hassle.
 
 ---
 
-*Created by [Your Name/Company] • Questions? Reach out to the developer.*
+## Need Help?
+
+If something looks wrong:
+1. Refresh the page — fixes most issues
+2. Check with whoever set it up
+3. The app reads from a database, so it can't really "break" — worst case is a refresh needed
+
+---
+
+*Built by [Your Developer] • Questions? Reach out to the person who set this up.*
