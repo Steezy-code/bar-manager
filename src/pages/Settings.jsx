@@ -9,6 +9,7 @@ export default function Settings() {
       inventory: JSON.parse(localStorage.getItem('barmanager_inventory') || '[]'),
       checklists: JSON.parse(localStorage.getItem('barmanager_checklists') || '[]'),
       timeoff: JSON.parse(localStorage.getItem('barmanager_timeoff') || '[]'),
+      timeoff_pending: JSON.parse(localStorage.getItem('barmanager_timeoff_pending') || '[]'),
       schedule: JSON.parse(localStorage.getItem('barmanager_schedule') || '[]'),
       exportedAt: new Date().toISOString(),
       version: '1.0'
@@ -21,7 +22,7 @@ export default function Settings() {
     a.download = `barmanager-full-export-${new Date().toISOString().split('T')[0]}.json`
     a.click()
     
-    setMsg('✅ All data exported (Inventory, Checklists, Schedule, Time Off)!')
+    setMsg('✅ All data exported (Inventory, Checklists, Schedule, Time Off + Pending)!')
     setTimeout(() => setMsg(''), 4000)
   }
 
@@ -49,6 +50,10 @@ export default function Settings() {
         }
         if (data.schedule) {
           localStorage.setItem('barmanager_schedule', JSON.stringify(data.schedule))
+          imported++
+        }
+        if (data.timeoff_pending) {
+          localStorage.setItem('barmanager_timeoff_pending', JSON.stringify(data.timeoff_pending))
           imported++
         }
         

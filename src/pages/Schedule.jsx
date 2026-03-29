@@ -16,10 +16,19 @@ export default function Schedule() {
   const csvRef = useRef(null)
 
   const printSchedule = () => {
-    // Add print class temporarily
     document.body.classList.add('printing')
     window.print()
     document.body.classList.remove('printing')
+  }
+
+  const getTimeOffDays = (dayNum) => {
+    if (!timeOff.length) return []
+    return timeOff.filter(to => {
+      if (!to.days) return false
+      if (to.year !== currentYear || to.month !== currentMonth) return false
+      const days = String(to.days).split(',').map(d => parseInt(d.trim()))
+      return days.includes(dayNum)
+    })
   }
 
   const currentMonth = currentDate.getMonth()
@@ -54,8 +63,10 @@ export default function Schedule() {
   }
 
   const clearAll = () => {
-    if (confirm('Clear ALL shifts? This cannot be undone!')) {
+    if (confirm('Clear ALL shifts and time off? This cannot be undone!')) {
       saveShifts([])
+      setTimeOff([])
+      localStorage.removeItem('barmanager_timeoff')
     }
   }
 
@@ -164,16 +175,7 @@ export default function Schedule() {
       </div>
       <input type="file" accept=".csv" ref={csvRef} onChange={importCSV} className="hidden" />
 
-      {timeOff.length > 0 && (
-        <div className="card bg-yellow-500/20 border border-yellow-500">
-          <h3 className="text-yellow-400 font-bold mb-2">📅 Time Off</h3>
-          <div className="flex flex-wrap gap-2">
-            {timeOff.map((to, i) => (
-              <span key={i} className="bg-yellow-600 px-2 py-1 rounded text-sm">{to.name}: {to.dates}</span>
-            ))}
-          </div>
-        </div>
-      )}
+      
 
       <div className="flex items-center justify-center gap-4">
         <button onClick={prevMonth} className="p-2 bg-bar-card rounded-lg"><ChevronLeftIcon className="w-5 h-5" /></button>
@@ -221,6 +223,9 @@ export default function Schedule() {
                       <TrashIcon className="w-3 h-3" />
                     </button>
                   </div>
+                ))}
+                {getTimeOffDays(dayNum).map(to => (
+                  <div key={to.id} className="bg-yellow-600 p-1 rounded text-xs mt-1">OFF: {to.name}</div>
                 ))}
               </div>
             )

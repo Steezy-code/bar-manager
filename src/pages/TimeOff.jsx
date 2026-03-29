@@ -1,66 +1,108 @@
 import { useState, useEffect } from 'react'
-import { TrashIcon, PlusIcon } from '@heroicons/react/24/outline'
+import { TrashIcon, PlusIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
 
 const STORAGE_KEY = 'barmanager_timeoff'
+const PENDING_KEY = 'barmanager_timeoff_pending'
 
 export default function TimeOff() {
-  const [timeOff, setTimeOff] = useState([])
+  const [approved, setApproved] = useState([])
+  const [pending, setPending] = useState([])
   const [showAdd, setShowAdd] = useState(false)
-  const [newTimeOff, setNewTimeOff] = useState({ name: '', dates: '', days: [] })
+  const [newTimeOff, setNewTimeOff] = useState({ name: '', dates: '', days: '' })
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved) setTimeOff(JSON.parse(saved))
+    const savedApproved = localStorage.getItem(STORAGE_KEY)
+    if (savedApproved) setApproved(JSON.parse(savedApproved))
+    
+    const savedPending = localStorage.getItem(PENDING_KEY)
+    if (savedPending) setPending(JSON.parse(savedPending))
   }, [])
 
-  const save = (newData) => {
-    setTimeOff(newData)
+  const saveApproved = (newData) => {
+    setApproved(newData)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newData))
   }
 
-  const addTimeOff = (e) => {
+  const savePending = (newData) => {
+    setPending(newData)
+    localStorage.setItem(PENDING_KEY, JSON.stringify(newData))
+  }
+
+  const addPending = (e) => {
     e.preventDefault()
-    // Convert dates to day abbreviations (Mon, Tue, etc.)
-    const days = extractDaysFromDates(newTimeOff.dates)
-    const to = { ...newTimeOff, days, id: Date.now() }
-    save([...timeOff, to])
+    const currentMonth = new Date().getMonth()
+    const currentYear = new Date().getFullYear()
+    const to = { ...newTimeOff, id: Date.now(), status: 'pending', month: currentMonth, year: currentYear }
+    savePending([...pending, to])
     setShowAdd(false)
-    setNewTimeOff({ name: '', dates: '', days: [] })
+    setNewTimeOff({ name: '', dates: '', days: '' })
   }
 
-  const extractDaysFromDates = (dateRange) => {
-    // Simple extraction - manager can manually add days
-    // For now, return empty and manager can manually add
-    return []
+  const approveRequest = (request) => {
+    const currentMonth = new Date().getMonth()
+    const currentYear = new Date().getFullYear()
+    const approvedItem = { ...request, status: 'approved', month: currentMonth, year: currentYear }
+    saveApproved([...approved, approvedItem])
+    savePending(pending.filter(p => p.id !== request.id))
   }
 
-  const remove = (id) => save(timeOff.filter(t => t.id !== id))
+  const denyRequest = (id) => {
+    if (confirm('Deny this time off request?')) {
+      savePending(pending.filter(p => p.id !== id))
+    }
+  }
+
+  const removeApproved = (id) => saveApproved(approved.filter(t => t.id !== id))
 
   return (
     <div className="space-y-6 pb-24 lg:pb-0">
       <div className="flex justify-between">
         <div>
           <h1 className="text-2xl font-bold">Time Off</h1>
-          <p className="text-gray-400 text-sm">Manager adds approved time off - shows on schedule</p>
+          <p className="text-gray-400 text-sm">Review requests → Approve to add to schedule</p>
         </div>
         <button onClick={() => setShowAdd(true)} className="btn-primary">
-          <PlusIcon className="w-4 h-4" /> Add Approved
+          <PlusIcon className="w-4 h-4" /> Add Request
         </button>
       </div>
 
+      {pending.length > 0 && (
+        <div className="card bg-yellow-500/20 border border-yellow-500">
+          <h2 className="text-lg font-bold mb-4 text-yellow-400">Pending Requests ({pending.length})</h2>
+          <div className="space-y-3">
+            {pending.map(t => (
+              <div key={t.id} className="flex items-center justify-between p-3 bg-bar-card rounded-lg border border-yellow-500">
+                <div>
+                  <div className="font-semibold">{t.name}</div>
+                  <div className="text-sm text-gray-400">{t.dates} (Days: {t.days})</div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => approveRequest(t)} className="p-2 bg-green-600 rounded text-white hover:bg-green-500">
+                    <CheckIcon className="w-5 h-5" /> Approve
+                  </button>
+                  <button onClick={() => denyRequest(t.id)} className="p-2 bg-red-600 rounded text-white hover:bg-red-500">
+                    <XMarkIcon className="w-5 h-5" /> Deny
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="card">
-        <h2 className="text-lg font-bold mb-4">Approved Time Off ({timeOff.length})</h2>
-        {timeOff.length === 0 ? (
+        <h2 className="text-lg font-bold mb-4">Approved ({approved.length})</h2>
+        {approved.length === 0 ? (
           <p className="text-gray-400">No time off scheduled yet</p>
         ) : (
           <div className="space-y-3">
-            {timeOff.map(t => (
+            {approved.map(t => (
               <div key={t.id} className="flex items-center justify-between p-3 bg-bar-blue rounded-lg">
                 <div>
                   <div className="font-semibold">{t.name}</div>
-                  <div className="text-sm text-gray-400">{t.dates}</div>
+                  <div className="text-sm text-gray-400">{t.dates} (Days: {t.days})</div>
                 </div>
-                <button onClick={() => remove(t.id)} className="p-2 text-red-500">
+                <button onClick={() => removeApproved(t.id)} className="p-2 text-red-500">
                   <TrashIcon className="w-5 h-5" />
                 </button>
               </div>
@@ -69,27 +111,17 @@ export default function TimeOff() {
         )}
       </div>
 
-      <div className="card bg-blue-500/20 border border-blue-500">
-        <h3 className="text-blue-400 font-bold">💡 How It Works</h3>
-        <ul className="text-gray-300 text-sm mt-2 space-y-1">
-          <li>• Add approved time off here</li>
-          <li>• It automatically shows on the Schedule page</li>
-          <li>• Export includes time off data</li>
-          <li>• Send to staff so they know who's out when</li>
-        </ul>
-      </div>
-
-      {/* Add Time Off Modal */}
       {showAdd && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <form onSubmit={addTimeOff} className="bg-bar-card p-6 rounded-xl w-full max-w-md space-y-3">
-            <h2 className="text-xl font-bold">Add Time Off</h2>
+          <form onSubmit={addPending} className="bg-bar-card p-6 rounded-xl w-full max-w-md space-y-3">
+            <h2 className="text-xl font-bold">Add Time Off Request</h2>
             <input placeholder="Staff name" className="input" value={newTimeOff.name} onChange={e => setNewTimeOff({...newTimeOff, name: e.target.value})} required />
             <input placeholder="Dates (e.g., March 15-17)" className="input" value={newTimeOff.dates} onChange={e => setNewTimeOff({...newTimeOff, dates: e.target.value})} required />
-            <p className="text-gray-400 text-xs">Enter the date range - it will show on schedule</p>
+            <input placeholder="Day numbers (e.g., 15,16,17)" className="input" value={newTimeOff.days} onChange={e => setNewTimeOff({...newTimeOff, days: e.target.value})} required />
+            <p className="text-gray-400 text-xs">Request goes to queue. Click Approve to add to schedule.</p>
             <div className="flex gap-2">
               <button type="button" onClick={() => setShowAdd(false)} className="btn-secondary flex-1">Cancel</button>
-              <button className="btn-primary flex-1">Add</button>
+              <button className="btn-primary flex-1">Add to Queue</button>
             </div>
           </form>
         </div>

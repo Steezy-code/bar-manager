@@ -4,9 +4,17 @@ import { ExclamationTriangleIcon, PlusIcon } from '@heroicons/react/24/outline'
 
 const INV_KEY = 'barmanager_inventory'
 
+const getGreeting = () => {
+  const hour = new Date().getHours()
+  if (hour < 12) return 'Good Morning! 🌅'
+  if (hour < 17) return 'Good Afternoon! ☀️'
+  return 'Good Evening! 🌙'
+}
+
 export default function Dashboard() {
   const [lowStock, setLowStock] = useState(0)
   const [lowItems, setLowItems] = useState([])
+  const [greeting, setGreeting] = useState(getGreeting())
 
   useEffect(() => {
     const saved = localStorage.getItem(INV_KEY)
@@ -18,9 +26,14 @@ export default function Dashboard() {
     }
   }, [])
 
+  useEffect(() => {
+    const interval = setInterval(() => setGreeting(getGreeting()), 60000)
+    return () => clearInterval(interval)
+  }, [])
+
   return (
     <div className="space-y-6 pb-24 lg:pb-0">
-      <h1 className="text-2xl font-bold">Good Morning! 👋</h1>
+      <h1 className="text-2xl font-bold">{greeting} 👋</h1>
 
       {/* Low Stock Alert */}
       {lowStock > 0 && (
