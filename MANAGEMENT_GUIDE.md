@@ -68,6 +68,31 @@ BarManager is your all-in-one management hub for running your bar/restaurant. Th
 - Add new staff
 - Change roles (staff ↔ manager)
 - Remove team members if needed
+- **Import/Export:** Use these buttons to save and load your data — useful for backups or transferring between accounts
+
+---
+
+## Important Notes
+
+### 🔔 About Notifications
+**You will NOT receive notifications** when staff complete tasks, submit time-off requests, or update inventory. This app is designed as:
+- A **management hub** for you to build lists, schedules, and track things
+- A **tool to print** clean checklists and schedules
+
+Staff are expected to complete tasks on their own. If you need real-time notifications, that would require a more complex setup with authentication.
+
+### 👤 Who "Drives" This App?
+The person who set this up (you, or whoever the tech person is) is the **driver** of this app. Here's what that means:
+
+- **You are the source of truth** — if data gets lost or someone needs to re-sync, they come to you
+- **Others use it through you** — if a manager or staff member wants in, you add them (or point them to the link)
+- **Import/Export is your friend** — use the Export button in Settings to back up data. If someone's data gets messed up, you can send them an export to import
+
+### 🔄 How Others Use This App
+If other managers or staff want to use the app:
+1. Send them the link (same one you use)
+2. They can view/enter data, but **you're still the backup source of truth**
+3. Periodically export data to keep a master copy
 
 ---
 
@@ -111,7 +136,13 @@ A: Yes — but that's intentional for a small team. Everyone sees the schedule, 
 A: Their shifts and requests stay but get disassociated. You can always re-add them if they come back.
 
 **Q: Can I export data?**
-A: Yes — the data lives in Supabase (the database). You can export from there if you need reports.
+A: Yes — use the Export button in Settings (for each section). This saves a file you can keep as backup or send to others.
+
+**Q: What if someone's data gets messed up?**
+A: As the "driver," you export a clean copy and they import it. You're the backup source of truth.
+
+**Q: Do people need accounts to use this?**
+A: No — it's open. But since there's no login tracking, just be aware that anyone with the link can view/edit.
 
 **Q: Is this secure?**
 A: The app itself is open (no login), but the database has security rules. Only authorized team members could access the data backend if they had credentials.
