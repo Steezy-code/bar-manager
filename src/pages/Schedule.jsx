@@ -10,11 +10,14 @@ export default function Schedule() {
   const [shifts, setShifts] = useState([])
   const [timeOff, setTimeOff] = useState([])
   const [showAddShift, setShowAddShift] = useState(false)
-  const [newShift, setNewShift] = useState({ name: '', day: 1, start: '16:00', end: '23:00', month: new Date().getMonth(), year: new Date().getFullYear() })
+  const [showCopyWeek, setShowCopyWeek] = useState(false)
+  const [copyToMonth, setCopyToMonth] = useState(0)
+  const [newShift, setNewShift] = useState({ name: '', day: 1, start: '16:00', end: '23:00' })
   const csvRef = useRef(null)
 
   const currentMonth = currentDate.getMonth()
   const currentYear = currentDate.getFullYear()
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
   useEffect(() => {
     const savedShifts = localStorage.getItem(STORAGE_KEY)
@@ -34,7 +37,7 @@ export default function Schedule() {
     const shift = { ...newShift, month: currentMonth, year: currentYear, id: Date.now() }
     saveShifts([...shifts, shift])
     setShowAddShift(false)
-    setNewShift({ name: '', day: 1, start: '16:00', end: '23:00', month: currentMonth, year: currentYear })
+    setNewShift({ name: '', day: 1, start: '16:00', end: '23:00' })
   }
 
   const deleteShift = (id) => {
@@ -60,20 +63,23 @@ export default function Schedule() {
     a.click()
   }
 
-  const copyWeek = () => {
-    // Copy current week's schedule to all weeks
-    if (confirm('Copy this week\'s schedule to all weeks? This adds shifts without removing existing ones.')) {
-      const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-      let added = 0
-      shifts.filter(s => s.month === currentMonth && s.year === currentYear).forEach(shift => {
-        for (let m = 0; m < 12; m++) {
-          const newShift = { ...shift, id: Date.now() + Math.random(), month: m }
-          saveShifts([...shifts, newShift])
-          added++
-        }
-      })
-      alert(`Added ${added} shifts across months!`)
+  const handleCopyWeek = () => {
+    const weekShifts = shifts.filter(s => s.month === currentMonth && s.year === currentYear)
+    if (weekShifts.length === 0) {
+      alert('No shifts to copy from this month!')
+      return
     }
+    
+    // Copy only to the selected month
+    let added = 0
+    weekShifts.forEach(shift => {
+      const newShift = { ...shift, id: Date.now() + Math.random(), month: parseInt(copyToMonth) }
+      saveShifts([...shifts, newShift])
+      added++
+    })
+    
+    setShowCopyWeek(false)
+    alert(`Copied ${added} shifts to ${months[copyToMonth]}!`)
   }
 
   const importCSV = (e) => {
@@ -86,7 +92,6 @@ export default function Schedule() {
       const lines = text.split('\n').filter(l => l.trim())
       
       const dayMap = {Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6}
-      const reverseDayMap = {0:'Sun',1:'Mon',2:'Tue',3:'Wed',4:'Thu',5:'Fri',6:'Sat'}
       const newShifts = []
       
       lines.forEach((line, i) => {
@@ -100,7 +105,6 @@ export default function Schedule() {
         if (name) {
           let dayNum
           if (isNaN(dayRaw)) {
-            // It's a day name
             const shortDay = dayRaw.substring(0, 3)
             dayNum = dayMap[shortDay] !== undefined ? dayMap[shortDay] + 1 : 1
           } else {
@@ -140,7 +144,7 @@ export default function Schedule() {
         <div className="flex gap-2 flex-wrap">
           <button onClick={() => csvRef.current.click()} className="btn-secondary text-sm">📥 Import</button>
           <button onClick={exportCSV} className="btn-secondary text-sm">📤 Export</button>
-          <button onClick={copyWeek} className="btn-secondary text-sm">📋 Copy Week</button>
+          <button onClick={() => setShowCopyWeek(true)} className="btn-secondary text-sm">📋 Copy Week</button>
           <button onClick={clearAll} className="btn-secondary text-sm text-red-400">🗑️ Clear</button>
           <button onClick={() => setView(view === 'week' ? 'month' : 'week')} className="btn-primary">
             {view === 'week' ? '📅 Month' : '📅 Week'}
@@ -213,6 +217,29 @@ export default function Schedule() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Copy Week Modal */}
+      {showCopyWeek && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-bar-card p-6 rounded-xl w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">📋 Copy Week to Another Month</h2>
+            <p className="text-gray-400 mb-4">Which month do you want to copy this week's schedule to?</p>
+            <select 
+              className="input mb-4" 
+              value={copyToMonth} 
+              onChange={e => setCopyToMonth(e.target.value)}
+            >
+              {months.map((m, i) => (
+                <option key={i} value={i}>{m} {currentYear}</option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <button onClick={() => setShowCopyWeek(false)} className="btn-secondary flex-1">Cancel</button>
+              <button onClick={handleCopyWeek} className="btn-primary flex-1">Copy to {months[copyToMonth]}</button>
+            </div>
+          </div>
         </div>
       )}
 
