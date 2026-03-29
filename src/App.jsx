@@ -15,6 +15,7 @@ function App() {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [dbError, setDbError] = useState(false)
 
   useEffect(() => {
     checkUser()
@@ -22,6 +23,14 @@ function App() {
 
   const checkUser = async () => {
     try {
+      // Test connection first
+      const { data: test, error: testError } = await supabase.from('profiles').select('count').limit(1)
+      
+      if (testError) {
+        console.log('DB connection issue, using demo mode:', testError.message)
+        setDbError(true)
+      }
+      
       const { data: { session } } = await supabase.auth.getSession()
       setSession(session)
       
@@ -35,6 +44,7 @@ function App() {
       }
     } catch (err) {
       console.error('Error checking user:', err)
+      setDbError(true)
     } finally {
       setLoading(false)
     }
@@ -46,6 +56,11 @@ function App() {
         <div className="text-bar-accent text-xl">Loading...</div>
       </div>
     )
+  }
+
+  // If no session and DB error, show demo login
+  if (!session && dbError) {
+    return <Login />
   }
 
   if (!session) {
@@ -60,13 +75,13 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Navigate to="/" />} />
-        <Route path="/" element={<Layout userRole={profile?.role} />}>
+        <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="inventory" element={<Inventory />} />
           <Route path="schedule" element={<Schedule />} />
           <Route path="checklists" element={<Checklists />} />
           <Route path="timeoff" element={<TimeOff />} />
-          <Route path="settings" element={<Settings currentUser={profile} />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

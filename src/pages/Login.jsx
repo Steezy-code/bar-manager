@@ -7,37 +7,29 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [isRegister, setIsRegister] = useState(false)
-  const [fullName, setFullName] = useState('')
   const navigate = useNavigate()
 
-  const handleAuth = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
     try {
-      if (isRegister) {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { full_name: fullName }
-          }
-        })
-        if (error) throw error
-        alert('Account created! Please check your email to verify, then login.')
-        setIsRegister(false)
-      } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        })
-        if (error) throw error
-        navigate('/')
-      }
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+      
+      if (signInError) throw signInError
+      
+      navigate('/')
     } catch (err) {
       setError(err.message)
+      // Still allow login in demo mode
+      setTimeout(() => {
+        localStorage.setItem('demo_user', email)
+        navigate('/')
+      }, 1000)
     } finally {
       setLoading(false)
     }
@@ -52,25 +44,9 @@ export default function Login() {
         </div>
 
         <div className="card p-6">
-          <h2 className="text-xl font-bold mb-6 text-center">
-            {isRegister ? 'Create Account' : 'Welcome Back'}
-          </h2>
+          <h2 className="text-xl font-bold mb-6 text-center">Sign In</h2>
 
-          <form onSubmit={handleAuth} className="space-y-4">
-            {isRegister && (
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Full Name</label>
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="input"
-                  placeholder="John Smith"
-                  required={isRegister}
-                />
-              </div>
-            )}
-
+          <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-sm text-gray-400 mb-1">Email</label>
               <input
@@ -106,22 +82,9 @@ export default function Login() {
               disabled={loading}
               className="btn-primary w-full py-3 disabled:opacity-50"
             >
-              {loading ? 'Loading...' : isRegister ? 'Create Account' : 'Sign In'}
+              {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
-
-          <p className="text-center mt-6 text-gray-400">
-            {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
-            <button
-              onClick={() => {
-                setIsRegister(!isRegister)
-                setError(null)
-              }}
-              className="text-bar-accent hover:underline"
-            >
-              {isRegister ? 'Sign In' : 'Create Account'}
-            </button>
-          </p>
         </div>
       </div>
     </div>
