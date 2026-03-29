@@ -16,7 +16,10 @@ export default function Schedule() {
   const csvRef = useRef(null)
 
   const printSchedule = () => {
+    // Add print class temporarily
+    document.body.classList.add('printing')
     window.print()
+    document.body.classList.remove('printing')
   }
 
   const currentMonth = currentDate.getMonth()
