@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { PlusIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, ExclamationTriangleIcon, TrashIcon } from '@heroicons/react/24/outline'
 
 const STORAGE_KEY = 'barmanager_inventory'
 
@@ -32,6 +32,12 @@ export default function Inventory() {
   const update = (id, delta) => {
     const updated = items.map(i => i.id === id ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i)
     save(updated)
+  }
+
+  const remove = (id) => {
+    if (confirm('Remove this item from inventory?')) {
+      save(items.filter(i => i.id !== id))
+    }
   }
 
   const add = (e) => {
@@ -73,9 +79,11 @@ export default function Inventory() {
           const isLow = i.quantity <= (i.threshold || 5)
           return (
             <div key={i.id} className={`card ${isLow ? 'border-red-500' : ''}`}>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-start">
                 <h3 className="font-semibold">{i.name}</h3>
-                {isLow && <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />}
+                <button onClick={() => remove(i.id)} className="text-red-500 p-1 hover:bg-red-500/20 rounded">
+                  <TrashIcon className="w-4 h-4" />
+                </button>
               </div>
               {isLow && <p className="text-xs text-red-400">Low stock (min: {i.threshold})</p>}
               <div className="flex items-center mt-2">
