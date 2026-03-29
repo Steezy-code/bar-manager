@@ -2,35 +2,49 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { TrashIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
 
-export default function Settings({ currentUser }) {
+export default function Settings() {
   const [profiles, setProfiles] = useState([])
   const [loading, setLoading] = useState(true)
   const [currentUserRole, setCurrentUserRole] = useState('staff')
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-    loadProfiles()
-    checkUserRole()
+    loadData()
   }, [])
 
-  const checkUserRole = async () => {
+  const loadData = async () => {
     try {
+      // Get current user
       const { data: { user } } = await supabase.auth.getUser()
+      
       if (user) {
-        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-        if (profile) setCurrentUserRole(profile.role)
+        // Get current user's profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role, approved')
+          .eq('id', user.id)
+          .single()
+        
+        if (profile) {
+          setCurrentUserRole(profile.role || 'staff')
+        }
+      }
+      
+      // Get all profiles
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at')
+      
+      if (profilesError) {
+        console.error('Profiles error:', profilesError)
+        setError('Could not load profiles. Make sure the database is set up correctly.')
+      } else {
+        setProfiles(profilesData || [])
       }
     } catch (err) {
-      console.error('Error checking role:', err)
-    }
-  }
-
-  const loadProfiles = async () => {
-    try {
-      const { data, error } = await supabase.from('profiles').select('*').order('created_at')
-      if (error) throw error
-      setProfiles(data || [])
-    } catch (err) {
-      console.error('Error loading profiles:', err)
+      console.error('Error loading settings:', err)
+      setError(err.message)
     } finally {
       setLoading(false)
     }
@@ -39,7 +53,7 @@ export default function Settings({ currentUser }) {
   const updateRole = async (id, role) => {
     try {
       await supabase.from('profiles').update({ role }).eq('id', id)
-      loadProfiles()
+      loadData()
     } catch (err) {
       alert('Error updating role: ' + err.message)
     }
@@ -48,7 +62,7 @@ export default function Settings({ currentUser }) {
   const approveUser = async (id) => {
     try {
       await supabase.from('profiles').update({ approved: true }).eq('id', id)
-      loadProfiles()
+      loadData()
     } catch (err) {
       alert('Error approving user: ' + err.message)
     }
@@ -58,13 +72,28 @@ export default function Settings({ currentUser }) {
     if (!confirm('Are you sure you want to remove this user?')) return
     try {
       await supabase.from('profiles').delete().eq('id', id)
-      loadProfiles()
+      loadData()
     } catch (err) {
       alert('Error deleting user: ' + err.message)
     }
   }
 
   if (loading) return <div className="text-center py-20">Loading settings...</div>
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Settings</h1>
+          <p className="text-gray-400">Manage your team</p>
+        </div>
+        <div className="card bg-red-500/20 border border-red-500">
+          <p className="text-red-400">{error}</p>
+          <button onClick={loadData} className="btn-primary mt-4">Retry</button>
+        </div>
+      </div>
+    )
+  }
 
   const isManager = currentUserRole === 'manager'
   const pendingUsers = profiles.filter(p => !p.approved)
@@ -74,7 +103,7 @@ export default function Settings({ currentUser }) {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-gray-400">Manage your team and preferences</p>
+        <p className="text-gray-400">Manage your team • Your role: {currentUserRole}</p>
       </div>
 
       {isManager && pendingUsers.length > 0 && (
@@ -102,7 +131,7 @@ export default function Settings({ currentUser }) {
       )}
 
       <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Team Members</h2>
+        <h2 className="text-lg font-semibold mb-4">Team Members ({approvedUsers.length})</h2>
         <div className="space-y-3">
           {approvedUsers.map(profile => (
             <div key={profile.id} className="flex items-center justify-between p-3 bg-bar-blue rounded-lg">
@@ -113,7 +142,7 @@ export default function Settings({ currentUser }) {
               <div className="flex items-center gap-3">
                 {isManager ? (
                   <>
-                    <select value={profile.role} onChange={(e) => updateRole(profile.id, e.target.value)}
+                    <select value={profile.role || 'staff'} onChange={(e) => updateRole(profile.id, e.target.value)}
                       className="bg-bar-card border border-bar-blue rounded-lg px-3 py-1 text-sm">
                       <option value="staff">Staff</option>
                       <option value="manager">Manager</option>
@@ -123,20 +152,19 @@ export default function Settings({ currentUser }) {
                     </button>
                   </>
                 ) : (
-                  <span className="text-gray-400 text-sm">{profile.role}</span>
+                  <span className="text-gray-400 text-sm capitalize">{profile.role || 'staff'}</span>
                 )}
               </div>
             </div>
           ))}
         </div>
-        {approvedUsers.length === 0 && <p className="text-gray-400 text-center py-4">No team members yet.</p>}
+        {approvedUsers.length === 0 && <p className="text-gray-400 text-center py-4">No approved team members yet.</p>}
       </div>
 
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">About BarManager</h2>
         <div className="text-gray-400 space-y-2">
-          <p>Version 1.3.0</p>
-          <p>Your role: {currentUserRole}</p>
+          <p>Version 1.3.1</p>
         </div>
       </div>
     </div>

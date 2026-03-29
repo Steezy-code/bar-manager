@@ -12,13 +12,20 @@ const navItems = [
   { name: 'Settings', path: '/settings', icon: Cog6ToothIcon },
 ]
 
-export default function Layout({ userRole }) {
+export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const navigate = useNavigate()
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    navigate('/login')
+    try {
+      await supabase.auth.signOut()
+      // Force a full page reload to clear state
+      window.location.href = '/login'
+    } catch (err) {
+      console.error('Logout error:', err)
+      // Fallback: just redirect anyway
+      window.location.href = '/login'
+    }
   }
 
   return (
