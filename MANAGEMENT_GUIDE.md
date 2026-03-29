@@ -57,11 +57,17 @@ BarManager is your all-in-one management hub for running your bar/restaurant. Th
 - **Timestamped:** You'll see exactly who completed what and when
 - **Accountability:** No more "I forgot" — it's all recorded
 
-### 🏝️ Time Off
-- Staff submit requests with dates and reason
-- **You get notified** (check the Time Off page)
-- **Approve or Deny** with one click
-- Approved requests automatically show on the schedule
+### 🏝️ Time Off (How It Actually Works)
+Since there are no notifications, here's the real workflow:
+
+1. **Staff text you** — "Hey, I need off next Friday"
+2. **You decide** — Approve or deny in your head
+3. **You update the schedule manually** — Remove their shift for that day
+4. **You print the new schedule** — Staff see who's working without them
+
+The Time Off page in the app exists but isn't actively used — it's more for your reference. The real flow is: **staff → text you → you update schedule → print new schedule**.
+
+Don't expect staff to submit requests through the app. They won't. They text you, you handle it.
 
 ### ⚙️ Settings (Team Management)
 - View all team members
@@ -134,15 +140,16 @@ If other managers or staff want to use the app:
 
 ---
 
-## What Do My Staff Need to Do?
+## What Do My Staff Actually Need to Do
 
-| Task | Who | How Often |
-|------|-----|------------|
-| Update inventory when stocked | Bar staff | Daily |
-| Complete opening checklist | Opening shift | Every shift before opening |
-| Complete closing checklist | Closing shift | Every shift before leaving |
-| Check schedule | All staff | Daily |
-| Request time off | All staff | As needed |
+| Task | How It Works |
+|------|--------------|
+| Time off | Staff **text YOU**. You update the schedule. Print new schedule. |
+| Schedule | Staff **look at the printed copy** you put on the wall |
+| Checklists | Staff **use the printed copy** you tape by the register |
+| Inventory | You track this. Staff restock when you tell them. |
+
+That's it. Staff don't need to open the app. They look at the printed schedule, use the printed checklist, and text you for time off.
 
 ---
 
@@ -165,51 +172,12 @@ If other managers or staff want to use the app:
 
 ---
 
-## Common Questions
+## TL;DR
 
-**Q: Can staff see everything?**
-A: Yes — but that's intentional for a small team. Everyone sees the schedule, inventory, and can complete checklists. It's a collaborative tool, not a hierarchical surveillance system.
+You build → You print → You put on wall → Staff use paper.
 
-**Q: What happens if I delete a team member?**
-A: Their shifts and requests stay but get disassociated. You can always re-add them if they come back.
-
-**Q: Can I export data?**
-A: Yes — use the Export button in Settings (for each section). This saves a file you can keep as backup or send to others.
-
-**Q: What if someone's data gets messed up?**
-A: As the "driver," you export a clean copy and they import it. You're the backup source of truth.
-
-**Q: Do people need accounts to use this?**
-A: No — it's open. But since there's no login tracking, just be aware that anyone with the link can view/edit.
-
-**Q: Is this secure?**
-A: The app itself is open (no login), but the database has security rules. Only authorized team members could access the data backend if they had credentials.
+That's the whole thing.
 
 ---
 
-## Summary for Management
-
-This tool replaces the old way of doing things:
-
-| Old Way | New Way |
-|---------|---------|
-| 📝 Paper schedules or text threads | Digital schedule everyone sees |
-| 📦 Spreadsheet or memory inventory | Automatic low-stock alerts |
-| 📋 Clipboard checklists | Digital with timestamps + proof |
-| ✉️ Texts/Slack for time-off requests | In-app requests, one-click approve/deny |
-| 🔐 Multiple logins for every tool | One link, open and go |
-
-**Goal:** Less confusion, more accountability, smoother day-to-day operations — without the hassle.
-
----
-
-## Need Help?
-
-If something looks wrong:
-1. Refresh the page — fixes most issues
-2. Check with whoever set it up
-3. The app reads from a database, so it can't really "break" — worst case is a refresh needed
-
----
-
-*Built by [Your Developer] • Questions? Reach out to the person who set this up.*
+*Built by [Your Developer] • Questions? Reach out to whoever set this up.*
