@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { PlusIcon, ExclamationTriangleIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { useState, useEffect, useRef } from 'react'
+import { PlusIcon, ExclamationTriangleIcon, TrashIcon, ArrowDownTrayIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline'
 
 const STORAGE_KEY = 'barmanager_inventory'
 
@@ -7,6 +7,7 @@ export default function Inventory() {
   const [items, setItems] = useState([])
   const [showAdd, setShowAdd] = useState(false)
   const [newItem, setNewItem] = useState({ name: '', quantity: 0, unit: '', threshold: 5 })
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
@@ -48,6 +49,43 @@ export default function Inventory() {
     setNewItem({ name: '', quantity: 0, unit: '', threshold: 5 })
   }
 
+  const exportInventory = () => {
+    const data = JSON.stringify(items, null, 2)
+    const blob = new Blob([data], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `inventory-${new Date().toISOString().split('T')[0]}.json`
+    a.click()
+  }
+
+  const importInventory = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      try {
+        const imported = JSON.parse(event.target.result)
+        if (!Array.isArray(imported)) {
+          alert('Invalid file format')
+          return
+        }
+        
+        const count = imported.length
+        if (confirm(`This will replace ALL ${items.length} inventory items with ${count} items from the file. Continue?`)) {
+          const withIds = imported.map((item, idx) => ({ ...item, id: Date.now() + idx }))
+          save(withIds)
+          alert(`Replaced inventory with ${count} items`)
+        }
+      } catch (err) {
+        alert('Failed to parse file: ' + err.message)
+      }
+    }
+    reader.readAsText(file)
+    fileInputRef.current.value = ''
+  }
+
   const lowItems = items.filter(i => i.quantity <= (i.threshold || 5))
 
   return (
@@ -57,7 +95,12 @@ export default function Inventory() {
           <h1 className="text-2xl font-bold">Inventory</h1>
           <p className="text-gray-400">{items.length} items</p>
         </div>
-        <button onClick={() => setShowAdd(true)} className="btn-primary"><PlusIcon className="w-5 h-5" /> Add</button>
+        <div className="flex gap-2">
+          <button onClick={exportInventory} className="btn-secondary text-sm"><ArrowDownTrayIcon className="w-4 h-4" /> Export</button>
+          <button onClick={() => fileInputRef.current.click()} className="btn-secondary text-sm"><ArrowUpTrayIcon className="w-4 h-4" /> Import</button>
+          <input type="file" accept=".json" ref={fileInputRef} onChange={importInventory} className="hidden" />
+          <button onClick={() => setShowAdd(true)} className="btn-primary"><PlusIcon className="w-5 h-5" /> Add</button>
+        </div>
       </div>
 
       {lowItems.length > 0 && (

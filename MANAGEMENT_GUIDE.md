@@ -45,10 +45,6 @@ BarManager is your all-in-one management hub for running your bar/restaurant. Th
 ### 📅 Schedule
 - **View:** Click any week to see who's working
 - **Assign shifts:** Click "Add Shift" → pick employee, date, start/end time
-- **Roles shown by color:**
-  - 🟢 Green = server
-  - 🔵 Blue = bartender  
-  - 🟡 Yellow = manager
 - **At a glance:** See coverage for the whole week instantly
 
 ### ✅ Checklists
@@ -177,6 +173,26 @@ That's it. Staff don't need to open the app. They look at the printed schedule, 
 You build → You print → You put on wall → Staff use paper.
 
 That's the whole thing.
+
+---
+
+## ⚠️ CRITICAL: Don't Clear Your Browser Data!
+
+**Your data lives in your browser.** If you clear your browser history, cache, or cookies, **ALL data will be lost** — schedules, checklists, inventory, everything.
+
+### To Protect Your Data:
+- ✅ DO regularly export data (Settings → Export)
+- ✅ DO keep the link saved in your bookmarks
+- ❌ DON'T clear browser history/cache
+- ❌ DON'T use incognito/private mode
+- ❌ DON'T switch browsers without exporting first
+
+### If You Need to Clear Your Browser:
+1. Export ALL data first (each section has an Export button)
+2. Clear your browser
+3. Re-import your data after
+
+**You have been warned.** The driver MUST back up data before any browser clearing.
 
 ---
 

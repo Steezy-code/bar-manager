@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { HomeIcon, CubeIcon, CalendarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, Cog6ToothIcon, ArrowRightOnRectangleIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
+import { HomeIcon, CubeIcon, CalendarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, Cog6ToothIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
 
 const navItems = [
   { name: 'Dashboard', path: '/', icon: HomeIcon },
@@ -13,12 +13,6 @@ const navItems = [
 
 export default function Layout({ user, onLogout }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const navigate = useNavigate()
-
-  const handleLogout = () => {
-    onLogout()
-    navigate('/login')
-  }
 
   return (
     <div className="min-h-screen bg-bar-dark">
@@ -36,11 +30,7 @@ export default function Layout({ user, onLogout }) {
             </NavLink>
           ))}
         </nav>
-        <div className="absolute bottom-0 w-full p-4 border-t border-bar-blue">
-          <button onClick={handleLogout} className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-gray-400 hover:bg-red-600 hover:text-white transition">
-            <ArrowRightOnRectangleIcon className="w-5 h-5" />Logout
-          </button>
-        </div>
+        
       </div>
       <div className="lg:ml-64 print:ml-0">
         <header className="lg:hidden flex items-center justify-between p-4 bg-bar-card border-b border-bar-blue print:hidden">
