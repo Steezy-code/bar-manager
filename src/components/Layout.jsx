@@ -42,15 +42,15 @@ export default function Layout({ user, onLogout }) {
           </button>
         </div>
       </div>
-      <div className="lg:ml-64">
-        <header className="lg:hidden flex items-center justify-between p-4 bg-bar-card border-b border-bar-blue">
+      <div className="lg:ml-64 print:ml-0">
+        <header className="lg:hidden flex items-center justify-between p-4 bg-bar-card border-b border-bar-blue print:hidden">
           <button onClick={() => setSidebarOpen(true)}><Bars3Icon className="w-6 h-6" /></button>
           <h1 className="text-lg font-bold text-bar-accent">BarManager</h1>
           <div className="w-6" />
         </header>
-        <main className="p-4 pb-24 lg:p-8"><Outlet /></main>
+        <main className="p-4 pb-24 lg:p-8 print:p-2"><Outlet /></main>
       </div>
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bar-card border-t border-bar-blue flex justify-around py-3 z-40">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bar-card border-t border-bar-blue flex justify-around py-3 z-40 print:hidden">
         {navItems.slice(0, 5).map((item) => (
           <NavLink key={item.path} to={item.path} className={({ isActive }) => `flex flex-col items-center gap-1 ${isActive ? 'text-bar-accent' : 'text-gray-500'}`}>
             <item.icon className="w-5 h-5" /><span className="text-xs">{item.name}</span>

@@ -14,6 +14,23 @@ body {
     size: landscape;
     margin: 0.4in;
   }
+  @page :first {
+    margin: 0.4in;
+  }
+  /* Hide browser headers/footers */
+  @page {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  /* Remove URL and timestamp from print */
+  * {
+    -webkit-print-color-adjust: none !important;
+    print-color-adjust: none !important;
+  }
+  body::before, body::after {
+    display: none !important;
+    content: none !important;
+  }
   body {
     background: white !important;
     color: black !important;
@@ -34,7 +51,7 @@ body {
     color: black !important;
   }
   /* Hide everything except content */
-  .print\:hidden, .btn-primary, .btn-secondary, .fixed, .inset-y-0, header, .border-t {
+  .print\:hidden, .btn-primary, .btn-secondary, .fixed, .inset-y-0, header, .border-t, nav, .sidebar {
     display: none !important;
   }
   /* Remove dark backgrounds completely */
