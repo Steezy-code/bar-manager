@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { PlusIcon, ExclamationTriangleIcon, TrashIcon, ArrowDownTrayIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline'
+import { usePermissions } from '../hooks/usePermissions'
 
 const STORAGE_KEY = 'barmanager_inventory'
 
@@ -8,6 +9,7 @@ export default function Inventory() {
   const [showAdd, setShowAdd] = useState(false)
   const [newItem, setNewItem] = useState({ name: '', quantity: 0, unit: '', threshold: 5 })
   const fileInputRef = useRef(null)
+  const { hasRole } = usePermissions()
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
@@ -95,12 +97,14 @@ export default function Inventory() {
           <h1 className="text-2xl font-bold">Inventory</h1>
           <p className="text-gray-400">{items.length} items</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={exportInventory} className="btn-secondary text-sm"><ArrowDownTrayIcon className="w-4 h-4" /> Export</button>
-          <button onClick={() => fileInputRef.current.click()} className="btn-secondary text-sm"><ArrowUpTrayIcon className="w-4 h-4" /> Import</button>
-          <input type="file" accept=".json" ref={fileInputRef} onChange={importInventory} className="hidden" />
-          <button onClick={() => setShowAdd(true)} className="btn-primary"><PlusIcon className="w-5 h-5" /> Add</button>
-        </div>
+        {hasRole('staff') && (
+          <div className="flex gap-2">
+            <button onClick={exportInventory} className="btn-secondary text-sm"><ArrowDownTrayIcon className="w-4 h-4" /> Export</button>
+            <button onClick={() => fileInputRef.current.click()} className="btn-secondary text-sm"><ArrowUpTrayIcon className="w-4 h-4" /> Import</button>
+            <input type="file" accept=".json" ref={fileInputRef} onChange={importInventory} className="hidden" />
+            <button onClick={() => setShowAdd(true)} className="btn-primary"><PlusIcon className="w-5 h-5" /> Add</button>
+          </div>
+        )}
       </div>
 
       {lowItems.length > 0 && (
@@ -124,17 +128,25 @@ export default function Inventory() {
             <div key={i.id} className={`card ${isLow ? 'border-red-500' : ''}`}>
               <div className="flex justify-between items-start">
                 <h3 className="font-semibold">{i.name}</h3>
-                <button onClick={() => remove(i.id)} className="text-red-500 p-1 hover:bg-red-500/20 rounded">
-                  <TrashIcon className="w-4 h-4" />
-                </button>
+                {hasRole('staff') && (
+                  <button onClick={() => remove(i.id)} className="text-red-500 p-1 hover:bg-red-500/20 rounded">
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                )}
               </div>
               {isLow && <p className="text-xs text-red-400">Low stock (min: {i.threshold})</p>}
-              <div className="flex items-center mt-2">
-                <button onClick={() => update(i.id, -1)} className="w-8 h-8 bg-bar-blue rounded">-</button>
-                <span className="mx-3 font-bold">{i.quantity}</span>
-                <button onClick={() => update(i.id, 1)} className="w-8 h-8 bg-bar-blue rounded">+</button>
-                <span className="ml-2 text-sm text-gray-400">{i.unit}</span>
-              </div>
+              {hasRole('staff') ? (
+                <div className="flex items-center mt-2">
+                  <button onClick={() => update(i.id, -1)} className="w-8 h-8 bg-bar-blue rounded">-</button>
+                  <span className="mx-3 font-bold">{i.quantity}</span>
+                  <button onClick={() => update(i.id, 1)} className="w-8 h-8 bg-bar-blue rounded">+</button>
+                  <span className="ml-2 text-sm text-gray-400">{i.unit}</span>
+                </div>
+              ) : (
+                <div className="mt-2">
+                  <span className="font-bold">{i.quantity}</span> <span className="text-sm text-gray-400">{i.unit}</span>
+                </div>
+              )}
             </div>
           )
         })}

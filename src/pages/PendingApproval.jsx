@@ -1,21 +1,27 @@
-import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import { ClockIcon } from '@heroicons/react/24/outline'
 
 export default function PendingApproval() {
-  const [email, setEmail] = useState('')
+  const { user, profile, signOut } = useAuth()
+  const navigate = useNavigate()
 
   useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) setEmail(user.email)
+    // If not logged in, redirect to login
+    if (!user) {
+      navigate('/login')
+      return
     }
-    getUser()
-  }, [])
+    // If profile is approved, redirect to dashboard
+    if (profile?.status === 'approved') {
+      navigate('/')
+    }
+  }, [user, profile, navigate])
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    window.location.reload()
+    await signOut()
+    navigate('/login')
   }
 
   return (
@@ -27,7 +33,7 @@ export default function PendingApproval() {
         
         <h1 className="text-2xl font-bold mb-2">Waiting for Approval</h1>
         <p className="text-gray-400 mb-6">
-          Your account ({email}) is pending approval from an administrator.
+          Your account ({user?.email}) is pending approval from an administrator.
         </p>
         
         <p className="text-gray-500 text-sm mb-6">
