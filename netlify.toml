@@ -3,7 +3,10 @@
   command = "npm run build"
 
 [build.environment]
-  NETLIFY_SECRET_SCANNING = "false"
+  # Disable secret scanning for these keys (they are injected into the bundle)
+  SECRETS_SCAN_OMIT_KEYS = "VITE_SUPABASE_URL,VITE_SUPABASE_ANON_KEY"
+  # Use custom ignore patterns for placeholder secrets
+  SECRETS_SCAN_IGNORED_PATTERNS_FILE = ".netlify/secret-scan-ignore"
 
 [[redirects]]
   from = "/*"
