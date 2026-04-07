@@ -1,58 +1,150 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { TrashIcon, PlusIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
-
-const STORAGE_KEY = 'barmanager_timeoff'
-const PENDING_KEY = 'barmanager_timeoff_pending'
+import { supabase } from '../lib/supabase'
+import { TABLES } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 
 export default function TimeOff() {
+  const { user } = useAuth()
   const [approved, setApproved] = useState([])
   const [pending, setPending] = useState([])
   const [showAdd, setShowAdd] = useState(false)
   const [newTimeOff, setNewTimeOff] = useState({ name: '', dates: '', days: '' })
+  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const savedApproved = localStorage.getItem(STORAGE_KEY)
-    if (savedApproved) setApproved(JSON.parse(savedApproved))
-    
-    const savedPending = localStorage.getItem(PENDING_KEY)
-    if (savedPending) setPending(JSON.parse(savedPending))
+  // Fetch time off requests from Supabase
+  const fetchTimeOff = useCallback(async () => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.TIME_OFF)
+        .select('*')
+        .order('created_at', { ascending: false })
+      
+      if (error) throw error
+
+      const pendingData = data.filter(r => r.status === 'pending')
+      const approvedData = data.filter(r => r.status === 'approved')
+      setPending(pendingData)
+      setApproved(approvedData)
+    } catch (err) {
+      console.error('Error fetching time off requests:', err)
+      alert('Failed to load time off requests from database.')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  const saveApproved = (newData) => {
-    setApproved(newData)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newData))
-  }
+  useEffect(() => {
+    fetchTimeOff()
+  }, [fetchTimeOff])
 
-  const savePending = (newData) => {
-    setPending(newData)
-    localStorage.setItem(PENDING_KEY, JSON.stringify(newData))
-  }
-
-  const addPending = (e) => {
+  // Add new pending request
+  const addPending = async (e) => {
     e.preventDefault()
+    if (!user) {
+      alert('You must be logged in to add a request.')
+      return
+    }
+
     const currentMonth = new Date().getMonth()
     const currentYear = new Date().getFullYear()
-    const to = { ...newTimeOff, id: Date.now(), status: 'pending', month: currentMonth, year: currentYear }
-    savePending([...pending, to])
-    setShowAdd(false)
-    setNewTimeOff({ name: '', dates: '', days: '' })
-  }
+    const requestToInsert = {
+      name: newTimeOff.name,
+      dates: newTimeOff.dates,
+      days: newTimeOff.days,
+      status: 'pending',
+      month: currentMonth,
+      year: currentYear,
+      user_id: user.id
+    }
 
-  const approveRequest = (request) => {
-    const currentMonth = new Date().getMonth()
-    const currentYear = new Date().getFullYear()
-    const approvedItem = { ...request, status: 'approved', month: currentMonth, year: currentYear }
-    saveApproved([...approved, approvedItem])
-    savePending(pending.filter(p => p.id !== request.id))
-  }
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.TIME_OFF)
+        .insert([requestToInsert])
+        .select('*')
+      if (error) throw error
 
-  const denyRequest = (id) => {
-    if (confirm('Deny this time off request?')) {
-      savePending(pending.filter(p => p.id !== id))
+      const inserted = data[0]
+      setPending([...pending, inserted])
+      setShowAdd(false)
+      setNewTimeOff({ name: '', dates: '', days: '' })
+    } catch (err) {
+      console.error('Error adding time off request:', err)
+      alert('Failed to add request to database.')
     }
   }
 
-  const removeApproved = (id) => saveApproved(approved.filter(t => t.id !== id))
+  // Approve request
+  const approveRequest = async (request) => {
+    try {
+      const { error } = await supabase
+        .from(TABLES.TIME_OFF)
+        .update({ status: 'approved' })
+        .eq('id', request.id)
+      if (error) throw error
+
+      // Move from pending to approved in state
+      setPending(pending.filter(p => p.id !== request.id))
+      setApproved([...approved, { ...request, status: 'approved' }])
+    } catch (err) {
+      console.error('Error approving request:', err)
+      alert('Failed to approve request in database.')
+    }
+  }
+
+  // Deny request (delete)
+  const denyRequest = async (id) => {
+    if (!confirm('Deny this time off request?')) return
+
+    try {
+      const { error } = await supabase
+        .from(TABLES.TIME_OFF)
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+
+      setPending(pending.filter(p => p.id !== id))
+    } catch (err) {
+      console.error('Error denying request:', err)
+      alert('Failed to deny request in database.')
+    }
+  }
+
+  // Remove approved request (delete)
+  const removeApproved = async (id) => {
+    if (!confirm('Remove this approved time off?')) return
+
+    try {
+      const { error } = await supabase
+        .from(TABLES.TIME_OFF)
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+
+      setApproved(approved.filter(t => t.id !== id))
+    } catch (err) {
+      console.error('Error removing approved request:', err)
+      alert('Failed to remove request from database.')
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6 pb-24 lg:pb-0">
+        <div className="flex justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Time Off</h1>
+            <p className="text-gray-400 text-sm">Loading...</p>
+          </div>
+        </div>
+        <div className="card">
+          <div className="text-gray-400">Loading time off requests...</div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 pb-24 lg:pb-0">

@@ -274,6 +274,119 @@ If your Netlify project supports deploy previews:
 
 ---
 
+## Test 13: Inventory Migration to Supabase
+
+**Prerequisite:** Run the SQL migration `2026-04-07-update-tables-for-supabase-migration.sql` in Supabase SQL Editor.
+
+**Steps:**
+1. Log in as any user with role `staff` or higher.
+2. Navigate to **Inventory** page.
+3. Verify that existing inventory items load from Supabase (not localStorage).
+4. **Add** a new item using the "Add" button.
+5. **Update** quantity using +/- buttons.
+6. **Delete** an item using the trash icon.
+7. Refresh the page.
+
+**Expected:**
+- Items persist after refresh (data stored in Supabase `inventory_items` table).
+- Changes are reflected in the `inventory_items` table (check via Supabase SQL Editor).
+- Low stock alerts appear correctly.
+
+**Verify in Supabase:**
+```sql
+SELECT id, name, quantity, unit, threshold, user_id FROM inventory_items ORDER BY created_at DESC;
+```
+
+---
+
+## Test 14: Checklists Migration to Supabase
+
+**Prerequisite:** SQL migration ensures `checklists` table has `data` (JSONB) column.
+
+**Steps:**
+1. Log in as any user.
+2. Navigate to **Checklists** page.
+3. Verify that default checklists (opening, closing, prep) appear.
+4. **Add a new list** using "+ New List" button.
+5. **Add tasks** to any list (toggle edit mode).
+6. **Toggle completion** of tasks.
+7. **Delete a task** and **delete a list**.
+8. Refresh the page.
+
+**Expected:**
+- All checklist data persists after refresh (stored in Supabase `checklists.data` JSONB).
+- Changes are reflected in the `checklists` table.
+- Print functionality still works (opens browser print dialog).
+
+**Verify in Supabase:**
+```sql
+SELECT user_id, data FROM checklists;
+```
+
+---
+
+## Test 15: Time Off Migration to Supabase
+
+**Prerequisite:** SQL migration ensures `time_off_requests` table has required columns.
+
+**Steps:**
+1. Log in as any user.
+2. Navigate to **Time Off** page.
+3. **Add a request** using "Add Request" button.
+4. Verify the request appears in **Pending Requests**.
+5. **Approve** the request (click Approve button).
+6. Verify the request moves to **Approved** section.
+7. **Delete** an approved request.
+8. Refresh the page.
+
+**Expected:**
+- Pending and approved requests persist after refresh.
+- Status changes are reflected in Supabase (`status` column).
+- Deleted requests are removed from the table.
+
+**Verify in Supabase:**
+```sql
+SELECT id, name, dates, days, status, user_id FROM time_off_requests ORDER BY created_at DESC;
+```
+
+---
+
+## Test 16: Dashboard Low Stock Alert (Supabase)
+
+**Steps:**
+1. Ensure at least one inventory item has quantity ≤ threshold.
+2. Navigate to **Dashboard**.
+3. Verify that low stock alert appears with correct items.
+4. Click "Go to Inventory" link – should navigate to Inventory page.
+
+**Expected:**
+- Dashboard loads without errors.
+- Low stock alert pulls data from Supabase `inventory_items` table.
+- Quick action buttons link to correct pages.
+
+---
+
+## Test 17: Settings Export/Import (Supabase)
+
+**Steps:**
+1. Navigate to **Settings** page.
+2. Click **Export Full Data**.
+3. Save the JSON file locally.
+4. Open the file and verify it contains Supabase table data (inventory, shifts, checklists, time off).
+5. **Import** the same file (or a modified version) using **Import Data**.
+6. Confirm the overwrite prompt.
+7. Refresh the app and verify data matches the imported file.
+
+**Expected:**
+- Export generates a JSON file with all Supabase tables.
+- Import replaces all existing data in Supabase tables with the imported data.
+- No data loss or corruption (ids may change).
+- After import, all pages reflect the new data.
+
+**Note:** Import is destructive – it deletes all existing rows in the target tables before inserting.
+
+---
+
 ## Troubleshooting
 
 | Issue | Likely Cause | Fix |
@@ -297,9 +410,22 @@ If your Netlify project supports deploy previews:
 | `src/pages/SignUp.jsx` | Sign-up / request access form |
 | `src/pages/PendingApproval.jsx` | Waiting screen for unapproved users |
 | `src/pages/Admin.jsx` | Admin panel — user list, role/status editing |
+| `src/pages/Schedule.jsx` | Schedule management (shifts) – now Supabase‑backed |
+| `src/pages/Inventory.jsx` | Inventory management – now Supabase‑backed |
+| `src/pages/Checklists.jsx` | Checklists – now Supabase‑backed |
+| `src/pages/TimeOff.jsx` | Time‑off requests – now Supabase‑backed |
+| `src/pages/Dashboard.jsx` | Dashboard with low‑stock alerts (reads from Supabase) |
+| `src/pages/Settings.jsx` | Export/import for Supabase tables |
 | `src/components/Layout.jsx` | Sidebar with conditional Admin link |
 | `src/App.jsx` | Router with `ProtectedRoute` and `requiredRole` guard |
 | `src/lib/supabase.js` | Supabase client init and table name constants |
+
+### SQL Migrations
+
+| File | Purpose |
+|---|---|
+| `migrations/2026‑04‑07‑add‑staff_name‑to‑shifts.sql` | Adds `staff_name` column to `shifts` table |
+| `migrations/2026‑04‑07‑update‑tables‑for‑supabase‑migration.sql` | Ensures all tables have required columns for migration |
 
 ---
 

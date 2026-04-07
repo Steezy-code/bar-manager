@@ -1,56 +1,124 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { PlusIcon, ExclamationTriangleIcon, TrashIcon, ArrowDownTrayIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline'
+import { supabase } from '../lib/supabase'
+import { TABLES } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
 
-const STORAGE_KEY = 'barmanager_inventory'
-
 export default function Inventory() {
+  const { user, profile } = useAuth()
+  const { hasRole } = usePermissions()
   const [items, setItems] = useState([])
   const [showAdd, setShowAdd] = useState(false)
   const [newItem, setNewItem] = useState({ name: '', quantity: 0, unit: '', threshold: 5 })
+  const [loading, setLoading] = useState(true)
   const fileInputRef = useRef(null)
-  const { hasRole } = usePermissions()
 
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved) {
-      setItems(JSON.parse(saved))
-    } else {
-      const defaults = [
-        { id: 1, name: 'Beer Kegs (IPA)', quantity: 8, unit: 'kegs', threshold: 3 },
-        { id: 2, name: 'House Wine (Red)', quantity: 12, unit: 'bottles', threshold: 5 },
-        { id: 3, name: 'Cocktail Napkins', quantity: 150, unit: 'pcs', threshold: 50 },
-        { id: 4, name: 'Cheddar Cheese', quantity: 10, unit: 'lbs', threshold: 3 },
-      ]
-      setItems(defaults)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(defaults))
+  // Fetch inventory items from Supabase
+  const fetchItems = useCallback(async () => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.INVENTORY)
+        .select('*')
+        .order('name', { ascending: true })
+      
+      if (error) throw error
+      setItems(data || [])
+    } catch (err) {
+      console.error('Error fetching inventory:', err)
+      alert('Failed to load inventory from database.')
+    } finally {
+      setLoading(false)
     }
   }, [])
 
-  const save = (newItems) => {
+  useEffect(() => {
+    fetchItems()
+  }, [fetchItems])
+
+  // Save to Supabase (used for updates)
+  const save = async (newItems) => {
+    // Note: For simplicity, we're replacing the whole list in state.
+    // In a real app, you'd do individual updates.
     setItems(newItems)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newItems))
+    // If you need to sync back to Supabase, you'd need to update each item.
+    // For phase 1, we'll keep updates via update/remove functions.
   }
 
-  const update = (id, delta) => {
-    const updated = items.map(i => i.id === id ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i)
-    save(updated)
-  }
+  // Update quantity (+/-)
+  const update = async (id, delta) => {
+    const item = items.find(i => i.id === id)
+    if (!item) return
 
-  const remove = (id) => {
-    if (confirm('Remove this item from inventory?')) {
-      save(items.filter(i => i.id !== id))
+    const newQuantity = Math.max(0, item.quantity + delta)
+    try {
+      const { error } = await supabase
+        .from(TABLES.INVENTORY)
+        .update({ quantity: newQuantity })
+        .eq('id', id)
+      if (error) throw error
+
+      setItems(items.map(i => i.id === id ? { ...i, quantity: newQuantity } : i))
+    } catch (err) {
+      console.error('Error updating quantity:', err)
+      alert('Failed to update quantity in database.')
     }
   }
 
-  const add = (e) => {
-    e.preventDefault()
-    const item = { ...newItem, id: Date.now() }
-    save([...items, item])
-    setShowAdd(false)
-    setNewItem({ name: '', quantity: 0, unit: '', threshold: 5 })
+  // Remove item
+  const remove = async (id) => {
+    if (!confirm('Remove this item from inventory?')) return
+
+    try {
+      const { error } = await supabase
+        .from(TABLES.INVENTORY)
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+
+      setItems(items.filter(i => i.id !== id))
+    } catch (err) {
+      console.error('Error removing item:', err)
+      alert('Failed to remove item from database.')
+    }
   }
 
+  // Add new item
+  const add = async (e) => {
+    e.preventDefault()
+    if (!user) {
+      alert('You must be logged in to add an item.')
+      return
+    }
+
+    const itemToInsert = {
+      name: newItem.name,
+      quantity: newItem.quantity,
+      unit: newItem.unit,
+      threshold: newItem.threshold,
+      user_id: user.id,
+      role: profile?.role || 'staff'
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.INVENTORY)
+        .insert([itemToInsert])
+        .select('*')
+      if (error) throw error
+
+      const inserted = data[0]
+      setItems([...items, inserted])
+      setShowAdd(false)
+      setNewItem({ name: '', quantity: 0, unit: '', threshold: 5 })
+    } catch (err) {
+      console.error('Error adding item:', err)
+      alert('Failed to add item to database.')
+    }
+  }
+
+  // Export inventory as JSON (local)
   const exportInventory = () => {
     const data = JSON.stringify(items, null, 2)
     const blob = new Blob([data], { type: 'application/json' })
@@ -61,12 +129,13 @@ export default function Inventory() {
     a.click()
   }
 
+  // Import inventory from JSON (local → Supabase)
   const importInventory = (e) => {
     const file = e.target.files[0]
     if (!file) return
     
     const reader = new FileReader()
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const imported = JSON.parse(event.target.result)
         if (!Array.isArray(imported)) {
@@ -76,12 +145,34 @@ export default function Inventory() {
         
         const count = imported.length
         if (confirm(`This will replace ALL ${items.length} inventory items with ${count} items from the file. Continue?`)) {
-          const withIds = imported.map((item, idx) => ({ ...item, id: Date.now() + idx }))
-          save(withIds)
+          // Delete existing items
+          const { error: deleteError } = await supabase
+            .from(TABLES.INVENTORY)
+            .delete()
+            .neq('id', '00000000-0000-0000-0000-000000000000') // delete all
+          if (deleteError) throw deleteError
+
+          // Insert new items
+          const itemsToInsert = imported.map(item => ({
+            name: item.name,
+            quantity: item.quantity,
+            unit: item.unit,
+            threshold: item.threshold,
+            user_id: user?.id || null,
+            role: profile?.role || 'staff'
+          }))
+          const { data, error: insertError } = await supabase
+            .from(TABLES.INVENTORY)
+            .insert(itemsToInsert)
+            .select('*')
+          if (insertError) throw insertError
+
+          setItems(data || [])
           alert(`Replaced inventory with ${count} items`)
         }
       } catch (err) {
-        alert('Failed to parse file: ' + err.message)
+        console.error('Import error:', err)
+        alert('Failed to import inventory: ' + err.message)
       }
     }
     reader.readAsText(file)
@@ -89,6 +180,22 @@ export default function Inventory() {
   }
 
   const lowItems = items.filter(i => i.quantity <= (i.threshold || 5))
+
+  if (loading) {
+    return (
+      <div className="space-y-6 pb-24 lg:pb-0">
+        <div className="flex justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Inventory</h1>
+            <p className="text-gray-400">Loading...</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-400">Loading inventory...</div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 pb-24 lg:pb-0">
