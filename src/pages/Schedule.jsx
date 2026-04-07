@@ -1,10 +1,30 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { PlusIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
+import { supabase } from '../lib/supabase'
+import { TABLES } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 
-const STORAGE_KEY = 'barmanager_schedule'
 const TIME_OFF_KEY = 'barmanager_timeoff'
 
+// Helper to convert day/month/year to Supabase date string (YYYY-MM-DD)
+const formatDateForSupabase = (year, month, day) => {
+  const monthStr = month < 10 ? `0${month}` : month
+  const dayStr = day < 10 ? `0${day}` : day
+  return `${year}-${monthStr}-${dayStr}`
+}
+
+// Helper to parse Supabase date string to day/month/year
+const parseSupabaseDate = (dateStr) => {
+  const date = new Date(dateStr)
+  return {
+    year: date.getFullYear(),
+    month: date.getMonth() + 1, // getMonth is 0-indexed, UI uses 1-indexed
+    day: date.getDate()
+  }
+}
+
 export default function Schedule() {
+  const { user, profile } = useAuth()
   const [view, setView] = useState('month')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [shifts, setShifts] = useState([])
@@ -13,7 +33,113 @@ export default function Schedule() {
   const [showCopyWeek, setShowCopyWeek] = useState(false)
   const [copyToMonth, setCopyToMonth] = useState(0)
   const [newShift, setNewShift] = useState({ name: '', day: 1, start: '16:00', end: '23:00' })
+  const [loading, setLoading] = useState(true)
   const csvRef = useRef(null)
+
+  const currentMonth = currentDate.getMonth()
+  const currentYear = currentDate.getFullYear()
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+  // Fetch shifts from Supabase
+  const fetchShifts = useCallback(async () => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.SHIFTS)
+        .select('*')
+        .order('date', { ascending: true })
+      
+      if (error) throw error
+
+      // Map Supabase rows to UI shape
+      const mapped = data.map(shift => ({
+        id: shift.id,
+        name: shift.staff_name || 'Shift',
+        ...parseSupabaseDate(shift.date),
+        start: shift.start_time,
+        end: shift.end_time,
+        // Keep month/year as numbers for filtering (UI uses zero-indexed month)
+        month: new Date(shift.date).getMonth(),
+        year: new Date(shift.date).getFullYear()
+      }))
+      setShifts(mapped)
+    } catch (err) {
+      console.error('Error fetching shifts:', err)
+      alert('Failed to load schedule from database.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Fetch time off from localStorage (still local for now)
+  useEffect(() => {
+    const savedTimeOff = localStorage.getItem(TIME_OFF_KEY)
+    if (savedTimeOff) setTimeOff(JSON.parse(savedTimeOff))
+    fetchShifts()
+  }, [fetchShifts])
+
+  // Add Shift to Supabase
+  const addShift = async (e) => {
+    e.preventDefault()
+    if (!user) {
+      alert('You must be logged in to add a shift.')
+      return
+    }
+
+    const shiftDate = formatDateForSupabase(currentYear, currentMonth + 1, newShift.day) // currentMonth is zero-indexed, need +1 for date
+    const shiftToInsert = {
+      staff_name: newShift.name,
+      date: shiftDate,
+      start_time: newShift.start,
+      end_time: newShift.end,
+      user_id: user.id, // optional for phase 1, but we have user
+      role: profile?.role || 'staff'
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.SHIFTS)
+        .insert([shiftToInsert])
+        .select('*')
+
+      if (error) throw error
+
+      const inserted = data[0]
+      const uiShift = {
+        id: inserted.id,
+        name: inserted.staff_name,
+        ...parseSupabaseDate(inserted.date),
+        start: inserted.start_time,
+        end: inserted.end_time,
+        month: new Date(inserted.date).getMonth(),
+        year: new Date(inserted.date).getFullYear()
+      }
+      setShifts(prev => [...prev, uiShift])
+      setShowAddShift(false)
+      setNewShift({ name: '', day: 1, start: '16:00', end: '23:00' })
+    } catch (err) {
+      console.error('Error adding shift:', err)
+      alert('Failed to add shift to database.')
+    }
+  }
+
+  // Delete Shift from Supabase
+  const deleteShift = async (id) => {
+    if (!confirm('Delete this shift?')) return
+
+    try {
+      const { error } = await supabase
+        .from(TABLES.SHIFTS)
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+
+      setShifts(prev => prev.filter(s => s.id !== id))
+    } catch (err) {
+      console.error('Error deleting shift:', err)
+      alert('Failed to delete shift from database.')
+    }
+  }
 
   const printSchedule = () => {
     document.body.classList.add('printing')
@@ -31,42 +157,14 @@ export default function Schedule() {
     })
   }
 
-  const currentMonth = currentDate.getMonth()
-  const currentYear = currentDate.getFullYear()
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-
-  useEffect(() => {
-    const savedShifts = localStorage.getItem(STORAGE_KEY)
-    if (savedShifts) setShifts(JSON.parse(savedShifts))
-    
-    const savedTimeOff = localStorage.getItem(TIME_OFF_KEY)
-    if (savedTimeOff) setTimeOff(JSON.parse(savedTimeOff))
-  }, [])
-
-  const saveShifts = (newShifts) => {
-    setShifts(newShifts)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newShifts))
-  }
-
-  const addShift = (e) => {
-    e.preventDefault()
-    const shift = { ...newShift, month: currentMonth, year: currentYear, id: Date.now() }
-    saveShifts([...shifts, shift])
-    setShowAddShift(false)
-    setNewShift({ name: '', day: 1, start: '16:00', end: '23:00' })
-  }
-
-  const deleteShift = (id) => {
-    if (confirm('Delete this shift?')) {
-      saveShifts(shifts.filter(s => s.id !== id))
-    }
-  }
-
   const clearAll = () => {
     if (confirm('Clear ALL shifts and time off? This cannot be undone!')) {
-      saveShifts([])
+      // For phase 1, we won't implement bulk delete from Supabase
+      // Instead, we'll just clear local state and localStorage for timeOff
+      setShifts([])
       setTimeOff([])
-      localStorage.removeItem('barmanager_timeoff')
+      localStorage.removeItem(TIME_OFF_KEY)
+      alert('Shifts cleared locally. Supabase data unchanged.')
     }
   }
 
@@ -92,12 +190,14 @@ export default function Schedule() {
     let added = 0
     weekShifts.forEach(shift => {
       const newShift = { ...shift, id: Date.now() + Math.random(), month: parseInt(copyToMonth) }
-      saveShifts([...shifts, newShift])
+      // Note: This will add to local state only, not to Supabase
+      // For phase 1, we'll keep copy week as local-only to keep it simple
+      setShifts(prev => [...prev, newShift])
       added++
     })
     
     setShowCopyWeek(false)
-    alert(`Copied ${added} shifts to ${months[copyToMonth]}!`)
+    alert(`Copied ${added} shifts to ${months[copyToMonth]} (local only).`)
   }
 
   const importCSV = (e) => {
@@ -133,8 +233,9 @@ export default function Schedule() {
         }
       })
       
-      saveShifts([...shifts, ...newShifts])
-      alert(`Imported ${newShifts.length} shifts!`)
+      // For phase 1, CSV import will be local only
+      setShifts(prev => [...prev, ...newShifts])
+      alert(`Imported ${newShifts.length} shifts (local only).`)
     }
     reader.readAsText(file)
     csvRef.current.value = ''
@@ -154,6 +255,19 @@ export default function Schedule() {
 
   const prevMonth = () => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))
   const nextMonth = () => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))
+
+  if (loading) {
+    return (
+      <div className="space-y-6 pb-24 lg:pb-0">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">Schedule</h1>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-400">Loading schedule...</div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 pb-24 lg:pb-0">
