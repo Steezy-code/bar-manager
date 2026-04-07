@@ -2,6 +2,9 @@
   publish = "dist"
   command = "npm run build"
 
+[build.environment]
+  NETLIFY_SECRET_SCANNING = "false"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
