@@ -76,6 +76,7 @@ export default function Schedule() {
       const mapped = data.map(shift => ({
         id: shift.id,
         name: shift.staff_name || 'Shift',
+        role: shift.role,
         ...parseSupabaseDate(shift.date),
         start: shift.start_time,
         end: shift.end_time,
@@ -129,6 +130,7 @@ export default function Schedule() {
       const uiShift = {
         id: inserted.id,
         name: inserted.staff_name,
+        role: inserted.role,
         ...parseSupabaseDate(inserted.date),
         start: inserted.start_time,
         end: inserted.end_time,
@@ -278,6 +280,51 @@ export default function Schedule() {
   const nextMonth = () => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))
   const goToday = () => setCurrentDate(new Date())
 
+  // Build list of days to show based on current view (week/month)
+  const getDaysToShow = () => {
+    const days = []
+    if (view === 'week') {
+      // Start of week (Sunday)
+      const start = new Date(currentDate)
+      start.setDate(start.getDate() - start.getDay())
+      for (let i = 0; i < 7; i++) {
+        const dayDate = new Date(start)
+        dayDate.setDate(start.getDate() + i)
+        const year = dayDate.getFullYear()
+        const month = dayDate.getMonth()
+        const day = dayDate.getDate()
+        const dayShifts = shifts.filter(s => s.year === year && s.month === month && s.day === day)
+        const dayTimeOff = timeOff.filter(to => 
+          to.year === year && 
+          to.month === month && 
+          to.days && 
+          String(to.days).split(',').map(d => parseInt(d.trim())).includes(day)
+        )
+        days.push({ date: dayDate, shifts: dayShifts, timeOff: dayTimeOff })
+      }
+    } else {
+      // Month view – all days of the current month
+      for (let i = 1; i <= daysInMonth; i++) {
+        const year = currentYear
+        const month = currentMonth
+        const day = i
+        const dayShifts = shifts.filter(s => s.year === year && s.month === month && s.day === day)
+        const dayTimeOff = timeOff.filter(to => 
+          to.year === year && 
+          to.month === month && 
+          to.days && 
+          String(to.days).split(',').map(d => parseInt(d.trim())).includes(day)
+        )
+        days.push({ date: new Date(year, month, day), shifts: dayShifts, timeOff: dayTimeOff })
+      }
+    }
+    return days
+  }
+
+  const formatDayHeader = (date) => {
+    return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+  }
+
   if (loading) {
     return (
       <div className="space-y-6 pb-24 lg:pb-0">
@@ -348,7 +395,7 @@ export default function Schedule() {
                     {shifts.filter(s => s.day === idx + 1 && s.month === currentMonth && s.year === currentYear).map(s => (
                       <div key={s.id} className="bg-bar-card p-2 rounded text-xs relative group hover:bg-bar-blue transition-colors">
                         <div className="font-semibold">{s.name}</div>
-                        <div className="text-gray-400">{s.start} – {s.end}</div>
+                        <div className="text-gray-400">{formatTime12(s.start)} – {formatTime12(s.end)}</div>
                         <button onClick={() => deleteShift(s.id)} className="absolute top-1 right-1 text-red-500 opacity-0 group-hover:opacity-100 bg-bar-card rounded p-1">
                           <TrashIcon className="w-3 h-3" />
                         </button>
