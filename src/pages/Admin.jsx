@@ -55,13 +55,16 @@ export default function Admin() {
 
   const saveEdit = async () => {
     if (!editingId) return;
-    const { error } = await supabase
+    console.log('Updating user:', editingId, { role: editRole, status: editStatus });
+    const { data, error } = await supabase
       .from(TABLES.PROFILES)
       .update({ role: editRole, status: editStatus })
       .eq('id', editingId);
     if (error) {
-      alert('Failed to update user: ' + error.message);
+      console.error('Failed to update user:', error);
+      alert('Failed to update user: ' + error.message + ' (details in console)');
     } else {
+      console.log('Updated successfully:', data);
       // Update local state
       setUsers(users.map(u => u.id === editingId ? { ...u, role: editRole, status: editStatus } : u));
       setEditingId(null);
@@ -69,13 +72,16 @@ export default function Admin() {
   };
 
   const approveUser = async (userId) => {
-    const { error } = await supabase
+    console.log('Approving user:', userId);
+    const { data, error } = await supabase
       .from(TABLES.PROFILES)
       .update({ status: 'approved' })
       .eq('id', userId);
     if (error) {
-      alert('Failed to approve user: ' + error.message);
+      console.error('Failed to approve user:', error);
+      alert('Failed to approve user: ' + error.message + ' (details in console)');
     } else {
+      console.log('Approved successfully:', data);
       setUsers(users.map(u => u.id === userId ? { ...u, status: 'approved' } : u));
     }
   };
