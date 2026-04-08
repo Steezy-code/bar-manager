@@ -301,7 +301,14 @@ SELECT id, name, quantity, unit, threshold, user_id FROM inventory_items ORDER B
 
 ## Test 14: Checklists Migration to Supabase
 
-**Prerequisite:** SQL migration ensures `checklists` table has `data` (JSONB) column.
+**Prerequisite:** Run the SQL migration `2026‑04‑08‑fix‑checklists‑table.sql` in Supabase SQL Editor.
+
+This migration ensures:
+- `user_id` column exists (unique constraint for one row per user).
+- `tasks` column (JSONB) is used (already present from the original schema).
+- `created_at` column added.
+
+If you previously ran the older migration (`2026‑04‑07‑update‑tables‑for‑supabase‑migration.sql`), the `data` column is not needed; the frontend now uses `tasks`.
 
 **Steps:**
 1. Log in as any user.
