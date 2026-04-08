@@ -383,103 +383,153 @@ export default function Schedule() {
       </div>
 
       {view === 'week' ? (
-        <div className="overflow-x-auto pb-2">
-          {shifts.filter(s => s.month === currentMonth && s.year === currentYear).length === 0 ? (
-            <div className="text-center py-8 text-gray-400 min-w-[300px]">No shifts scheduled this week. Add one!</div>
-          ) : (
-            <div className="grid grid-cols-7 gap-2 min-w-[700px]">
-              {weekDays.map((d, idx) => (
-                <div key={d}>
-                  <div className="text-center p-2 bg-bar-card rounded-t-lg font-semibold">{d}</div>
-                  <div className="mt-2 min-h-[150px] bg-bar-blue/30 p-2 space-y-2">
-                    {shifts.filter(s => s.day === idx + 1 && s.month === currentMonth && s.year === currentYear).map(s => (
-                      <div key={s.id} className="bg-bar-card p-2 rounded text-xs relative group hover:bg-bar-blue transition-colors">
-                        <div className="font-semibold">{s.name}</div>
-                        <div className="text-gray-400">{formatTime12(s.start)} – {formatTime12(s.end)}</div>
-                        <button onClick={() => deleteShift(s.id)} className="absolute top-1 right-1 text-red-500 opacity-0 group-hover:opacity-100 bg-bar-card rounded p-1">
-                          <TrashIcon className="w-3 h-3" />
-                        </button>
+        <div className="space-y-6">
+          {/* Day‑stacked list for week view */}
+          {(() => {
+            const days = getDaysToShow()
+            const anyShiftsOrTimeOff = days.some(day => day.shifts.length > 0 || day.timeOff.length > 0)
+            return (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {days.map(({ date, shifts: dayShifts, timeOff: dayTimeOff }) => {
+                    const dayKey = date.toISOString().split('T')[0]
+                    const isEmpty = dayShifts.length === 0 && dayTimeOff.length === 0
+                    return (
+                      <div
+                        key={dayKey}
+                        className="bg-bar-card rounded-xl p-4 shadow-lg hover:shadow-xl transition-shadow"
+                      >
+                        <div className="flex justify-between items-center mb-3 pb-2 border-b border-bar-dark">
+                          <h3 className="font-bold text-xl">{formatDayHeader(date)}</h3>
+                          <span className="text-gray-400 text-sm">
+                            {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                        </div>
+                        {isEmpty ? (
+                          <div className="text-center py-6 text-gray-400">
+                            <div className="text-lg">📅 No shifts</div>
+                            <p className="text-sm mt-1">Tap + to add a shift</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {dayShifts.map(s => (
+                              <div
+                                key={s.id}
+                                className={`p-3 rounded-lg border-l-4 ${getRoleColor(s.role)} border-opacity-80 bg-bar-blue/10`}
+                              >
+                                <div className="flex justify-between items-center">
+                                  <div className="font-semibold">{s.name}</div>
+                                  <button
+                                    onClick={() => deleteShift(s.id)}
+                                    className="text-red-500 hover:bg-red-500/20 p-1 rounded"
+                                  >
+                                    <TrashIcon className="w-4 h-4" />
+                                  </button>
+                                </div>
+                                <div className="text-gray-400 text-sm mt-1">
+                                  {formatTime12(s.start)} – {formatTime12(s.end)}
+                                </div>
+                                {s.role && (
+                                  <div className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-bar-dark text-gray-300">
+                                    {s.role}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {dayTimeOff.map(to => (
+                              <div
+                                key={to.id}
+                                className="bg-yellow-600/20 border-l-4 border-yellow-600 p-3 rounded-lg"
+                              >
+                                <div className="font-semibold text-yellow-300">⛱️ OFF: {to.name}</div>
+                                <div className="text-gray-300 text-sm">{to.dates}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                    )
+                  })}
                 </div>
-              ))}
-            </div>
-          )}
+                {!anyShiftsOrTimeOff && (
+                  <div className="text-center py-8 text-gray-400">
+                    No shifts scheduled this week. Add one to get started!
+                  </div>
+                )}
+              </>
+            )
+          })()}
         </div>
       ) : (
-        <>
-          {/* Mobile list view (vertical) */}
-          <div className="block md:hidden space-y-4">
-            {Array.from({ length: daysInMonth }).map((_, i) => {
-              const dayNum = i + 1
-              const dayShifts = shifts.filter(s => s.day === dayNum && s.month === currentMonth && s.year === currentYear)
-              const timeOffs = getTimeOffDays(dayNum)
-              if (dayShifts.length === 0 && timeOffs.length === 0) return null // skip empty days
+        <div className="space-y-6">
+          {/* Day‑stacked list (mobile: single column, desktop: multi‑column) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {getDaysToShow().map(({ date, shifts: dayShifts, timeOff: dayTimeOff }) => {
+              const dayKey = date.toISOString().split('T')[0]
+              const isEmpty = dayShifts.length === 0 && dayTimeOff.length === 0
               return (
-                <div key={dayNum} className="bg-bar-card p-4 rounded-lg">
-                  <div className="flex justify-between items-center mb-2">
-                    <h3 className="font-bold text-lg">{dayNum} {weekDays[(firstDay + dayNum - 1) % 7]}</h3>
-                    <span className="text-gray-400 text-sm">{monthName}</span>
+                <div
+                  key={dayKey}
+                  className="bg-bar-card rounded-xl p-4 shadow-lg hover:shadow-xl transition-shadow"
+                >
+                  <div className="flex justify-between items-center mb-3 pb-2 border-b border-bar-dark">
+                    <h3 className="font-bold text-xl">{formatDayHeader(date)}</h3>
+                    <span className="text-gray-400 text-sm">
+                      {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </span>
                   </div>
-                  {dayShifts.map(s => (
-                    <div key={s.id} className="bg-bar-blue p-3 rounded mb-2 flex justify-between items-center">
-                      <div>
-                        <div className="font-semibold">{s.name}</div>
-                        <div className="text-gray-400 text-sm">{formatTime12(s.start)} – {formatTime12(s.end)}</div>
-                      </div>
-                      <button onClick={() => deleteShift(s.id)} className="text-red-500 hover:bg-red-500/20 p-2 rounded">
-                        <TrashIcon className="w-4 h-4" />
-                      </button>
+                  {isEmpty ? (
+                    <div className="text-center py-6 text-gray-400">
+                      <div className="text-lg">📅 No shifts</div>
+                      <p className="text-sm mt-1">Tap + to add a shift</p>
                     </div>
-                  ))}
-                  {timeOffs.map(to => (
-                    <div key={to.id} className="bg-yellow-600 p-3 rounded mb-2">
-                      <div className="font-semibold">OFF: {to.name}</div>
-                      <div className="text-gray-200 text-sm">{to.dates}</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {dayShifts.map(s => (
+                        <div
+                          key={s.id}
+                          className={`p-3 rounded-lg border-l-4 ${getRoleColor(s.role)} border-opacity-80 bg-bar-blue/10`}
+                        >
+                          <div className="flex justify-between items-center">
+                            <div className="font-semibold">{s.name}</div>
+                            <button
+                              onClick={() => deleteShift(s.id)}
+                              className="text-red-500 hover:bg-red-500/20 p-1 rounded"
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="text-gray-400 text-sm mt-1">
+                            {formatTime12(s.start)} – {formatTime12(s.end)}
+                          </div>
+                          {s.role && (
+                            <div className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-bar-dark text-gray-300">
+                              {s.role}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {dayTimeOff.map(to => (
+                        <div
+                          key={to.id}
+                          className="bg-yellow-600/20 border-l-4 border-yellow-600 p-3 rounded-lg"
+                        >
+                          <div className="font-semibold text-yellow-300">⛱️ OFF: {to.name}</div>
+                          <div className="text-gray-300 text-sm">{to.dates}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )
-            })}
-            {shifts.filter(s => s.month === currentMonth && s.year === currentYear).length === 0 && (
-              <div className="text-center py-8 text-gray-400">No shifts scheduled this month. Add one!</div>
-            )}
-          </div>
-
-          {/* Desktop grid view (7‑column) */}
-          <div className="hidden md:grid grid-cols-7 gap-2 text-sm">
-            {weekDays.map(d => (
-              <div key={d} className="text-center p-2 bg-bar-card font-bold rounded-t-lg">{d}</div>
-            ))}
-            {Array.from({ length: firstDay }).map((_, i) => (
-              <div key={`empty-${i}`} className="bg-bar-dark/50 p-2 min-h-[100px] rounded"></div>
-            ))}
-            {Array.from({ length: daysInMonth }).map((_, i) => {
-              const dayNum = i + 1
-              return (
-                <div key={dayNum} className="bg-bar-blue/20 p-2 min-h-[100px] rounded">
-                  <div className="text-sm font-bold text-center mb-1">{dayNum}</div>
-                  {shifts.filter(s => s.day === dayNum && s.month === currentMonth && s.year === currentYear).map(s => (
-                    <div key={s.id} className="bg-bar-card p-2 rounded text-xs mt-1 relative group hover:bg-bar-blue transition-colors">
-                      <div className="font-semibold truncate">{s.name}</div>
-                      <div className="text-gray-400 text-xs">{formatTime12(s.start)}–{formatTime12(s.end)}</div>
-                      <button onClick={() => deleteShift(s.id)} className="absolute top-1 right-1 text-red-500 opacity-0 group-hover:opacity-100 bg-bar-card rounded p-1">
-                        <TrashIcon className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                  {getTimeOffDays(dayNum).map(to => (
-                    <div key={to.id} className="bg-yellow-600 p-2 rounded text-xs mt-1">OFF: {to.name}</div>
-                  ))}
+                  )}
                 </div>
               )
             })}
           </div>
           {shifts.filter(s => s.month === currentMonth && s.year === currentYear).length === 0 && (
-            <div className="hidden md:block text-center py-8 text-gray-400">No shifts scheduled this month. Add one!</div>
+            <div className="text-center py-8 text-gray-400">
+              No shifts scheduled this month. Add one to get started!
+            </div>
           )}
-        </>
+        </div>
       )}
 
       {/* Copy Week Modal */}
