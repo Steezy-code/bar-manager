@@ -29,20 +29,22 @@ const getRoleColor = (role) => {
 const TIME_OFF_KEY = 'barmanager_timeoff'
 
 // Helper to convert day/month/year to Supabase date string (YYYY-MM-DD)
-const formatDateForSupabase = (year, month, day) => {
-  const monthStr = month < 10 ? `0${month}` : month
-  const dayStr = day < 10 ? `0${day}` : day
-  return `${year}-${monthStr}-${dayStr}`
-}
+// Helper to convert year, zero‑indexed month (0–11), day (1–31) to Supabase date string (YYYY‑MM‑DD)
+const formatDateForSupabase = (year, monthZeroIndexed, day) => {
+  const month = monthZeroIndexed + 1; // convert to 1‑indexed for date string
+  const monthStr = month < 10 ? `0${month}` : month;
+  const dayStr = day < 10 ? `0${day}` : day;
+  return `${year}-${monthStr}-${dayStr}`;
+};
 
-// Helper to parse Supabase date string to day/month/year
+// Helper to parse Supabase date string (YYYY‑MM‑DD) to { year, month (0–11), day (1–31) }
 const parseSupabaseDate = (dateStr) => {
-  const date = new Date(dateStr)
+  const [year, month, day] = dateStr.split('-').map(Number);
   return {
-    year: date.getFullYear(),
-    month: date.getMonth() + 1, // getMonth is 0-indexed, UI uses 1-indexed
-    day: date.getDate()
-  }
+    year,
+    month: month - 1, // convert 1‑indexed month to zero‑indexed
+    day
+  };
 }
 
 export default function Schedule() {
@@ -81,10 +83,7 @@ export default function Schedule() {
         role: shift.role,
         ...parseSupabaseDate(shift.date),
         start: shift.start_time,
-        end: shift.end_time,
-        // Keep month/year as numbers for filtering (UI uses zero-indexed month)
-        month: new Date(shift.date).getMonth(),
-        year: new Date(shift.date).getFullYear()
+        end: shift.end_time
       }))
       setShifts(mapped)
     } catch (err) {
@@ -105,11 +104,8 @@ export default function Schedule() {
       
       if (error) throw error
 
-      // Map month to zero‑indexed (DB may store 1‑indexed)
-      const mapped = (data || []).map(to => ({
-        ...to,
-        month: to.month >= 1 ? to.month - 1 : to.month,
-      }))
+      // Month already zero‑indexed after migration
+      const mapped = data || [];
       setTimeOff(mapped)
     } catch (err) {
       console.error('Error fetching time off:', err)
@@ -131,7 +127,7 @@ export default function Schedule() {
       return
     }
 
-    const shiftDate = formatDateForSupabase(currentYear, currentMonth + 1, newShift.day) // currentMonth is zero-indexed, need +1 for date
+    const shiftDate = formatDateForSupabase(currentYear, currentMonth, newShift.day) // month already zero-indexed
     const shiftToInsert = {
       staff_name: newShift.name,
       date: shiftDate,
@@ -156,9 +152,7 @@ export default function Schedule() {
         role: inserted.role,
         ...parseSupabaseDate(inserted.date),
         start: inserted.start_time,
-        end: inserted.end_time,
-        month: new Date(inserted.date).getMonth(),
-        year: new Date(inserted.date).getFullYear()
+        end: inserted.end_time
       }
       setShifts(prev => [...prev, uiShift])
       setShowAddShift(false)
