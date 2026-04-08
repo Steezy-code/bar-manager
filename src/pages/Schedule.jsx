@@ -4,6 +4,27 @@ import { supabase } from '../lib/supabase'
 import { TABLES } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
+// Format HH:MM to h:mm AM/PM
+const formatTime12 = (time24) => {
+  if (!time24) return ''
+  const [hours, minutes] = time24.split(':')
+  const hour = parseInt(hours, 10)
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const hour12 = hour % 12 || 12
+  return `${hour12}:${minutes} ${ampm}`
+}
+
+// Get role color (default if role missing)
+const getRoleColor = (role) => {
+  switch (role?.toLowerCase()) {
+    case 'bartender': return 'bg-blue-500'
+    case 'server': return 'bg-green-500'
+    case 'cook': return 'bg-orange-500'
+    case 'manager': return 'bg-purple-500'
+    default: return 'bg-gray-500'
+  }
+}
+
 const TIME_OFF_KEY = 'barmanager_timeoff'
 
 // Helper to convert day/month/year to Supabase date string (YYYY-MM-DD)
@@ -358,7 +379,7 @@ export default function Schedule() {
                     <div key={s.id} className="bg-bar-blue p-3 rounded mb-2 flex justify-between items-center">
                       <div>
                         <div className="font-semibold">{s.name}</div>
-                        <div className="text-gray-400 text-sm">{s.start} – {s.end}</div>
+                        <div className="text-gray-400 text-sm">{formatTime12(s.start)} – {formatTime12(s.end)}</div>
                       </div>
                       <button onClick={() => deleteShift(s.id)} className="text-red-500 hover:bg-red-500/20 p-2 rounded">
                         <TrashIcon className="w-4 h-4" />
@@ -395,7 +416,7 @@ export default function Schedule() {
                   {shifts.filter(s => s.day === dayNum && s.month === currentMonth && s.year === currentYear).map(s => (
                     <div key={s.id} className="bg-bar-card p-2 rounded text-xs mt-1 relative group hover:bg-bar-blue transition-colors">
                       <div className="font-semibold truncate">{s.name}</div>
-                      <div className="text-gray-400 text-xs">{s.start}–{s.end}</div>
+                      <div className="text-gray-400 text-xs">{formatTime12(s.start)}–{formatTime12(s.end)}</div>
                       <button onClick={() => deleteShift(s.id)} className="absolute top-1 right-1 text-red-500 opacity-0 group-hover:opacity-100 bg-bar-card rounded p-1">
                         <TrashIcon className="w-3 h-3" />
                       </button>
