@@ -104,8 +104,15 @@ export default function Schedule() {
       
       if (error) throw error
 
-      // Month already zero‑indexed after migration
-      const mapped = data || [];
+      // Detect month indexing: if any month > 11, assume 1‑indexed (calendar months) and convert to zero‑indexed
+      const hasOneIndexed = data && data.some(to => to.month > 11);
+      const mapped = (data || []).map(to => ({
+        ...to,
+        month: hasOneIndexed ? to.month - 1 : to.month
+      }));
+      if (hasOneIndexed) {
+        console.warn('Detected 1‑indexed months in time‑off requests; applying conversion. Run migration 20260408040000_fix_time_off_month_index.sql.');
+      }
       setTimeOff(mapped)
     } catch (err) {
       console.error('Error fetching time off:', err)

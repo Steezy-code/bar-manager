@@ -11,6 +11,7 @@ export default function TimeOff() {
   const [showAdd, setShowAdd] = useState(false)
   const [newTimeOff, setNewTimeOff] = useState(() => ({ name: '', dates: '', days: '', month: new Date().getMonth(), year: new Date().getFullYear() }))
   const [loading, setLoading] = useState(true)
+  const [monthIsOneIndexed, setMonthIsOneIndexed] = useState(false)
 
   // Fetch time off requests from Supabase
   const fetchTimeOff = useCallback(async () => {
@@ -22,6 +23,13 @@ export default function TimeOff() {
         .order('created_at', { ascending: false })
       
       if (error) throw error
+
+      // Detect month indexing: if any month > 11, assume 1‑indexed (calendar months)
+      const hasOneIndexed = data && data.some(r => r.month > 11);
+      setMonthIsOneIndexed(hasOneIndexed);
+      if (hasOneIndexed) {
+        console.warn('Detected 1‑indexed months in time‑off requests; apply migration 20260408040000_fix_time_off_month_index.sql.');
+      }
 
       const pendingData = data.filter(r => r.status === 'pending')
       const approvedData = data.filter(r => r.status === 'approved')
@@ -47,12 +55,13 @@ export default function TimeOff() {
       return
     }
 
+    const monthToStore = monthIsOneIndexed ? newTimeOff.month + 1 : newTimeOff.month;
     const requestToInsert = {
       name: newTimeOff.name,
       dates: newTimeOff.dates,
       days: newTimeOff.days,
       status: 'pending',
-      month: newTimeOff.month,
+      month: monthToStore,
       year: newTimeOff.year,
       user_id: user.id
     }
