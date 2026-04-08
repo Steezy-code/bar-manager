@@ -301,17 +301,18 @@ SELECT id, name, quantity, unit, threshold, user_id FROM inventory_items ORDER B
 
 ## Test 14: Checklists Migration to Supabase
 
-**Prerequisite:** Run the SQL migration `2026‑04‑08‑fix‑checklists‑constraints.sql` in Supabase SQL Editor.
+**Prerequisite:** Run the SQL migration `2026‑04‑08‑drop‑not‑null‑checklists.sql` in Supabase SQL Editor.
 
 This migration ensures:
-- `name` column is made nullable (removes NOT NULL constraint).
-- `tasks` column exists (JSONB) and any `data` column is migrated.
+- `name` and `date` columns are made nullable (removes NOT NULL constraints).
+- Existing NULL values are backfilled with placeholders.
+- `tasks` column exists (JSONB).
 - `user_id` column exists with unique constraint (one row per user).
 - `created_at` column added.
 
-If you previously ran the older migration (`2026‑04‑07‑update‑tables‑for‑supabase‑migration.sql`), the `data` column will be dropped and its content moved to `tasks`.
+If you previously ran `2026‑04‑08‑fix‑checklists‑constraints.sql`, this migration is still safe (it will not break anything).
 
-**Note:** The frontend now includes a placeholder `name` ('My Checklists') to satisfy any remaining NOT NULL constraints.
+**Note:** The frontend now supplies both `name` ('My Checklists') and `date` (today's date) in all inserts/upserts.
 
 **Steps:**
 1. Log in as any user.
