@@ -255,15 +255,31 @@ export default function Schedule() {
 
   const prevMonth = () => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))
   const nextMonth = () => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))
+  const goToday = () => setCurrentDate(new Date())
 
   if (loading) {
     return (
       <div className="space-y-6 pb-24 lg:pb-0">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">Schedule</h1>
+          <div className="flex gap-2 flex-wrap print:hidden">
+            <div className="h-10 w-20 bg-bar-card rounded animate-pulse"></div>
+            <div className="h-10 w-20 bg-bar-card rounded animate-pulse"></div>
+            <div className="h-10 w-20 bg-bar-card rounded animate-pulse"></div>
+          </div>
         </div>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-gray-400">Loading schedule...</div>
+        <div className="flex items-center justify-center gap-4">
+          <div className="h-10 w-10 bg-bar-card rounded animate-pulse"></div>
+          <div className="h-10 w-40 bg-bar-card rounded animate-pulse"></div>
+          <div className="h-10 w-10 bg-bar-card rounded animate-pulse"></div>
+        </div>
+        <div className="grid grid-cols-7 gap-2">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div key={i} className="h-8 bg-bar-card rounded animate-pulse"></div>
+          ))}
+          {Array.from({ length: 35 }).map((_, i) => (
+            <div key={i} className="h-24 bg-bar-card rounded animate-pulse"></div>
+          ))}
         </div>
       </div>
     )
@@ -291,66 +307,117 @@ export default function Schedule() {
 
       
 
-      <div className="flex items-center justify-center gap-4">
-        <button onClick={prevMonth} className="p-2 bg-bar-card rounded-lg"><ChevronLeftIcon className="w-5 h-5" /></button>
-        <h2 className="text-xl font-bold">{monthName}</h2>
-        <button onClick={nextMonth} className="p-2 bg-bar-card rounded-lg"><ChevronRightIcon className="w-5 h-5" /></button>
+      <div className="flex items-center justify-center gap-3 flex-wrap">
+        <button onClick={prevMonth} className="p-2 bg-bar-card rounded-lg hover:bg-bar-blue transition-colors"><ChevronLeftIcon className="w-5 h-5" /></button>
+        <button onClick={goToday} className="px-3 py-2 bg-bar-accent rounded-lg text-sm font-semibold hover:bg-bar-accent/80 transition-colors">Today</button>
+        <h2 className="text-xl font-bold min-w-[200px] text-center">{monthName}</h2>
+        <button onClick={nextMonth} className="p-2 bg-bar-card rounded-lg hover:bg-bar-blue transition-colors"><ChevronRightIcon className="w-5 h-5" /></button>
       </div>
 
       {view === 'week' ? (
-        <div className="grid grid-cols-7 gap-2">
-          {weekDays.map((d, idx) => (
-            <div key={d}>
-              <div className="text-center p-2 bg-bar-card rounded-t-lg font-semibold">{d}</div>
-              <div className="mt-2 min-h-[150px] bg-bar-blue/30 p-2 space-y-2">
-                {shifts.filter(s => s.day === idx + 1 && s.month === currentMonth && s.year === currentYear).map(s => (
-                  <div key={s.id} className="bg-bar-card p-2 rounded text-xs relative group">
-                    <div className="font-semibold">{s.name}</div>
-                    <div className="text-gray-400">{s.start} - {s.end}</div>
-                    <button onClick={() => deleteShift(s.id)} className="absolute top-1 right-1 text-red-500 opacity-0 group-hover:opacity-100">
-                      <TrashIcon className="w-3 h-3" />
-                    </button>
+        <div className="overflow-x-auto pb-2">
+          {shifts.filter(s => s.month === currentMonth && s.year === currentYear).length === 0 ? (
+            <div className="text-center py-8 text-gray-400 min-w-[300px]">No shifts scheduled this week. Add one!</div>
+          ) : (
+            <div className="grid grid-cols-7 gap-2 min-w-[700px]">
+              {weekDays.map((d, idx) => (
+                <div key={d}>
+                  <div className="text-center p-2 bg-bar-card rounded-t-lg font-semibold">{d}</div>
+                  <div className="mt-2 min-h-[150px] bg-bar-blue/30 p-2 space-y-2">
+                    {shifts.filter(s => s.day === idx + 1 && s.month === currentMonth && s.year === currentYear).map(s => (
+                      <div key={s.id} className="bg-bar-card p-2 rounded text-xs relative group hover:bg-bar-blue transition-colors">
+                        <div className="font-semibold">{s.name}</div>
+                        <div className="text-gray-400">{s.start} – {s.end}</div>
+                        <button onClick={() => deleteShift(s.id)} className="absolute top-1 right-1 text-red-500 opacity-0 group-hover:opacity-100 bg-bar-card rounded p-1">
+                          <TrashIcon className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       ) : (
-        <div className="grid grid-cols-7 gap-1 text-sm">
-          {weekDays.map(d => (
-            <div key={d} className="text-center p-1 bg-bar-card font-bold">{d}</div>
-          ))}
-          {Array.from({ length: firstDay }).map((_, i) => (
-            <div key={`empty-${i}`} className="bg-bar-dark/50 p-2 min-h-[80px]"></div>
-          ))}
-          {Array.from({ length: daysInMonth }).map((_, i) => {
-            const dayNum = i + 1
-            return (
-              <div key={dayNum} className="bg-bar-blue/20 p-1 min-h-[80px]">
-                <div className="text-sm font-bold text-center">{dayNum}</div>
-                {shifts.filter(s => s.day === dayNum && s.month === currentMonth && s.year === currentYear).map(s => (
-                  <div key={s.id} className="bg-bar-card p-1 rounded text-xs mt-1 relative group">
-                    <div className="font-semibold truncate">{s.name}</div>
-                    <div className="text-gray-400 text-xs">{s.start}-{s.end}</div>
-                    <button onClick={() => deleteShift(s.id)} className="absolute top-0 right-0 text-red-500 opacity-0 group-hover:opacity-100 bg-bar-card rounded">
-                      <TrashIcon className="w-3 h-3" />
-                    </button>
+        <>
+          {/* Mobile list view (vertical) */}
+          <div className="block md:hidden space-y-4">
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const dayNum = i + 1
+              const dayShifts = shifts.filter(s => s.day === dayNum && s.month === currentMonth && s.year === currentYear)
+              const timeOffs = getTimeOffDays(dayNum)
+              if (dayShifts.length === 0 && timeOffs.length === 0) return null // skip empty days
+              return (
+                <div key={dayNum} className="bg-bar-card p-4 rounded-lg">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="font-bold text-lg">{dayNum} {weekDays[(firstDay + dayNum - 1) % 7]}</h3>
+                    <span className="text-gray-400 text-sm">{monthName}</span>
                   </div>
-                ))}
-                {getTimeOffDays(dayNum).map(to => (
-                  <div key={to.id} className="bg-yellow-600 p-1 rounded text-xs mt-1">OFF: {to.name}</div>
-                ))}
-              </div>
-            )
-          })}
-        </div>
+                  {dayShifts.map(s => (
+                    <div key={s.id} className="bg-bar-blue p-3 rounded mb-2 flex justify-between items-center">
+                      <div>
+                        <div className="font-semibold">{s.name}</div>
+                        <div className="text-gray-400 text-sm">{s.start} – {s.end}</div>
+                      </div>
+                      <button onClick={() => deleteShift(s.id)} className="text-red-500 hover:bg-red-500/20 p-2 rounded">
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                  {timeOffs.map(to => (
+                    <div key={to.id} className="bg-yellow-600 p-3 rounded mb-2">
+                      <div className="font-semibold">OFF: {to.name}</div>
+                      <div className="text-gray-200 text-sm">{to.dates}</div>
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
+            {shifts.filter(s => s.month === currentMonth && s.year === currentYear).length === 0 && (
+              <div className="text-center py-8 text-gray-400">No shifts scheduled this month. Add one!</div>
+            )}
+          </div>
+
+          {/* Desktop grid view (7‑column) */}
+          <div className="hidden md:grid grid-cols-7 gap-2 text-sm">
+            {weekDays.map(d => (
+              <div key={d} className="text-center p-2 bg-bar-card font-bold rounded-t-lg">{d}</div>
+            ))}
+            {Array.from({ length: firstDay }).map((_, i) => (
+              <div key={`empty-${i}`} className="bg-bar-dark/50 p-2 min-h-[100px] rounded"></div>
+            ))}
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const dayNum = i + 1
+              return (
+                <div key={dayNum} className="bg-bar-blue/20 p-2 min-h-[100px] rounded">
+                  <div className="text-sm font-bold text-center mb-1">{dayNum}</div>
+                  {shifts.filter(s => s.day === dayNum && s.month === currentMonth && s.year === currentYear).map(s => (
+                    <div key={s.id} className="bg-bar-card p-2 rounded text-xs mt-1 relative group hover:bg-bar-blue transition-colors">
+                      <div className="font-semibold truncate">{s.name}</div>
+                      <div className="text-gray-400 text-xs">{s.start}–{s.end}</div>
+                      <button onClick={() => deleteShift(s.id)} className="absolute top-1 right-1 text-red-500 opacity-0 group-hover:opacity-100 bg-bar-card rounded p-1">
+                        <TrashIcon className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                  {getTimeOffDays(dayNum).map(to => (
+                    <div key={to.id} className="bg-yellow-600 p-2 rounded text-xs mt-1">OFF: {to.name}</div>
+                  ))}
+                </div>
+              )
+            })}
+          </div>
+          {shifts.filter(s => s.month === currentMonth && s.year === currentYear).length === 0 && (
+            <div className="hidden md:block text-center py-8 text-gray-400">No shifts scheduled this month. Add one!</div>
+          )}
+        </>
       )}
 
       {/* Copy Week Modal */}
       {showCopyWeek && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-bar-card p-6 rounded-xl w-full max-w-md">
+          <div className="bg-bar-card p-4 md:p-6 rounded-none md:rounded-xl w-full max-w-full md:max-w-md mx-auto md:mx-0">
             <h2 className="text-xl font-bold mb-4">📋 Copy Week to Another Month</h2>
             <p className="text-gray-400 mb-4">Which month do you want to copy this week's schedule to?</p>
             <select 
@@ -372,7 +439,7 @@ export default function Schedule() {
 
       {showAddShift && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <form onSubmit={addShift} className="bg-bar-card p-6 rounded-xl w-full max-w-md space-y-3">
+          <form onSubmit={addShift} className="bg-bar-card p-4 md:p-6 rounded-none md:rounded-xl w-full max-w-full md:max-w-md space-y-3 mx-auto md:mx-0">
             <h2 className="text-xl font-bold">Add Shift for {monthName}</h2>
             <input placeholder="Staff name" className="input" value={newShift.name} onChange={e => setNewShift({...newShift, name: e.target.value})} required />
             <input type="number" min="1" max={daysInMonth} placeholder={`Day (1-${daysInMonth})`} className="input" value={newShift.day} onChange={e => setNewShift({...newShift, day: +e.target.value})} />
