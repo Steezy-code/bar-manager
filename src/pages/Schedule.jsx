@@ -93,12 +93,29 @@ export default function Schedule() {
     }
   }, [])
 
-  // Fetch time off from localStorage (still local for now)
+  const fetchTimeOff = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.TIME_OFF)
+        .select('*')
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false })
+      
+      if (error) throw error
+
+      // Map to expected shape (already matches)
+      setTimeOff(data || [])
+    } catch (err) {
+      console.error('Error fetching time off:', err)
+      alert('Failed to load time off from database.')
+    }
+  }, [])
+
+  // Fetch time off from Supabase (approved only)
   useEffect(() => {
-    const savedTimeOff = localStorage.getItem(TIME_OFF_KEY)
-    if (savedTimeOff) setTimeOff(JSON.parse(savedTimeOff))
     fetchShifts()
-  }, [fetchShifts])
+    fetchTimeOff()
+  }, [fetchShifts, fetchTimeOff])
 
   // Add Shift to Supabase
   const addShift = async (e) => {
@@ -183,12 +200,16 @@ export default function Schedule() {
   const clearAll = () => {
     if (confirm('Clear ALL shifts and time off? This cannot be undone!')) {
       // For phase 1, we won't implement bulk delete from Supabase
-      // Instead, we'll just clear local state and localStorage for timeOff
+      // Instead, we'll just clear local state (Supabase data unchanged)
       setShifts([])
       setTimeOff([])
-      localStorage.removeItem(TIME_OFF_KEY)
       alert('Shifts cleared locally. Supabase data unchanged.')
     }
+  }
+
+  const refreshSchedule = () => {
+    fetchShifts()
+    fetchTimeOff()
   }
 
   const exportCSV = () => {
@@ -363,6 +384,7 @@ export default function Schedule() {
           <button onClick={() => setShowCopyWeek(true)} className="btn-secondary text-sm">📋 Copy Week</button>
           <button onClick={clearAll} className="btn-secondary text-sm text-red-400">🗑️ Clear</button>
           <button onClick={printSchedule} className="btn-secondary text-sm">🖨️ Print</button>
+          <button onClick={refreshSchedule} className="btn-secondary text-sm">🔄 Refresh</button>
           <button onClick={() => setView(view === 'week' ? 'month' : 'week')} className="btn-primary">
             {view === 'week' ? '📅 Month' : '📅 Week'}
           </button>
