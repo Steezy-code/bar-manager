@@ -204,7 +204,7 @@ export default function Inventory() {
           <h1 className="text-2xl font-bold">Inventory</h1>
           <p className="text-gray-400">{items.length} items</p>
         </div>
-        {hasRole('staff') && (
+        {hasRole('manager') && (
           <div className="flex gap-2">
             <button onClick={exportInventory} className="btn-secondary text-sm"><ArrowDownTrayIcon className="w-4 h-4" /> Export</button>
             <button onClick={() => fileInputRef.current.click()} className="btn-secondary text-sm"><ArrowUpTrayIcon className="w-4 h-4" /> Import</button>
@@ -235,7 +235,7 @@ export default function Inventory() {
             <div key={i.id} className={`card ${isLow ? 'border-red-500' : ''}`}>
               <div className="flex justify-between items-start">
                 <h3 className="font-semibold">{i.name}</h3>
-                {hasRole('staff') && (
+                {hasRole('manager') && (
                   <button onClick={() => remove(i.id)} className="text-red-500 p-1 hover:bg-red-500/20 rounded">
                     <TrashIcon className="w-4 h-4" />
                   </button>

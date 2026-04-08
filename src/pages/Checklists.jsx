@@ -3,6 +3,7 @@ import { CheckCircleIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outlin
 import { supabase } from '../lib/supabase'
 import { TABLES } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { usePermissions } from '../hooks/usePermissions'
 
 const defaultTasks = {
   opening: [{id:1,t:'Check walk-in temps',c:false},{id:2,t:'Count drawer cash',c:false},{id:3,t:'Stock condiments',c:false}],
@@ -12,6 +13,7 @@ const defaultTasks = {
 
 export default function Checklists() {
   const { user } = useAuth()
+  const { hasRole } = usePermissions()
   const [list, setList] = useState('opening')
   const [tasks, setTasks] = useState(defaultTasks)
   const [edit, setEdit] = useState(false)
@@ -142,7 +144,9 @@ export default function Checklists() {
         <h1 className="text-2xl font-bold">Checklists</h1>
         <div className="flex gap-2">
           <button onClick={printChecklist} className="btn-secondary">🖨️ Print</button>
-          <button onClick={() => setShowNew(true)} className="btn-secondary">+ New List</button>
+          {hasRole('manager') && (
+            <button onClick={() => setShowNew(true)} className="btn-secondary">+ New List</button>
+          )}
         </div>
       </div>
       <div className="flex gap-2 overflow-x-auto flex-wrap">
@@ -154,7 +158,7 @@ export default function Checklists() {
             >
               {t}
             </button>
-            {Object.keys(tasks).length > 1 && (
+            {Object.keys(tasks).length > 1 && hasRole('manager') && (
               <button 
                 onClick={() => deleteList(t)} 
                 className="px-2 py-2 rounded-r-lg bg-red-600 text-white hover:bg-red-500"
@@ -168,9 +172,11 @@ export default function Checklists() {
       <div className="card">
         <div className="flex justify-between mb-4">
           <h2 className="text-lg font-semibold capitalize">{list}</h2>
-          <button onClick={() => setEdit(!edit)} className="btn-secondary text-sm">
-            {edit?'Done':'Edit'}
-          </button>
+          {hasRole('manager') && (
+            <button onClick={() => setEdit(!edit)} className="btn-secondary text-sm">
+              {edit?'Done':'Edit'}
+            </button>
+          )}
         </div>
         {edit && (
           <div className="flex gap-2 mb-4">

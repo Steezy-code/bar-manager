@@ -3,6 +3,7 @@ import { PlusIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon, ArrowDownTrayIc
 import { supabase } from '../lib/supabase'
 import { TABLES } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { usePermissions } from '../hooks/usePermissions'
 
 // Format HH:MM to h:mm AM/PM
 const formatTime12 = (time24) => {
@@ -46,6 +47,7 @@ const parseSupabaseDate = (dateStr) => {
 
 export default function Schedule() {
   const { user, profile } = useAuth()
+  const { hasRole } = usePermissions()
   const [view, setView] = useState('month')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [shifts, setShifts] = useState([])
@@ -383,18 +385,24 @@ export default function Schedule() {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Schedule</h1>
         <div className="flex gap-2 flex-wrap print:hidden">
-          <button onClick={() => csvRef.current.click()} className="btn-secondary text-sm">📥 Import</button>
-          <button onClick={exportCSV} className="btn-secondary text-sm">📤 Export</button>
-          <button onClick={() => setShowCopyWeek(true)} className="btn-secondary text-sm">📋 Copy Week</button>
-          <button onClick={clearAll} className="btn-secondary text-sm text-red-400">🗑️ Clear</button>
+          {hasRole('manager') && (
+            <>
+              <button onClick={() => csvRef.current.click()} className="btn-secondary text-sm">📥 Import</button>
+              <button onClick={exportCSV} className="btn-secondary text-sm">📤 Export</button>
+              <button onClick={() => setShowCopyWeek(true)} className="btn-secondary text-sm">📋 Copy Week</button>
+              <button onClick={clearAll} className="btn-secondary text-sm text-red-400">🗑️ Clear</button>
+            </>
+          )}
           <button onClick={printSchedule} className="btn-secondary text-sm">🖨️ Print</button>
           <button onClick={refreshSchedule} className="btn-secondary text-sm">🔄 Refresh</button>
           <button onClick={() => setView(view === 'week' ? 'month' : 'week')} className="btn-primary">
             {view === 'week' ? '📅 Month' : '📅 Week'}
           </button>
-          <button onClick={() => setShowAddShift(true)} className="btn-primary">
-            <PlusIcon className="w-4 h-4" /> Add
-          </button>
+          {hasRole('manager') && (
+            <button onClick={() => setShowAddShift(true)} className="btn-primary">
+              <PlusIcon className="w-4 h-4" /> Add
+            </button>
+          )}
         </div>
       </div>
       <input type="file" accept=".csv" ref={csvRef} onChange={importCSV} className="hidden" />
@@ -445,12 +453,14 @@ export default function Schedule() {
                               >
                                 <div className="flex justify-between items-center">
                                   <div className="font-semibold">{s.name}</div>
-                                  <button
-                                    onClick={() => deleteShift(s.id)}
-                                    className="text-red-500 hover:bg-red-500/20 p-1 rounded"
-                                  >
-                                    <TrashIcon className="w-4 h-4" />
-                                  </button>
+                                  {hasRole('manager') && (
+                                    <button
+                                      onClick={() => deleteShift(s.id)}
+                                      className="text-red-500 hover:bg-red-500/20 p-1 rounded"
+                                    >
+                                      <TrashIcon className="w-4 h-4" />
+                                    </button>
+                                  )}
                                 </div>
                                 <div className="text-gray-400 text-sm mt-1">
                                   {formatTime12(s.start)} – {formatTime12(s.end)}
@@ -518,12 +528,14 @@ export default function Schedule() {
                         >
                           <div className="flex justify-between items-center">
                             <div className="font-semibold">{s.name}</div>
-                            <button
-                              onClick={() => deleteShift(s.id)}
-                              className="text-red-500 hover:bg-red-500/20 p-1 rounded"
-                            >
-                              <TrashIcon className="w-4 h-4" />
-                            </button>
+                            {hasRole('manager') && (
+                              <button
+                                onClick={() => deleteShift(s.id)}
+                                className="text-red-500 hover:bg-red-500/20 p-1 rounded"
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                           <div className="text-gray-400 text-sm mt-1">
                             {formatTime12(s.start)} – {formatTime12(s.end)}
