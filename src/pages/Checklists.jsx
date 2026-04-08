@@ -30,7 +30,7 @@ export default function Checklists() {
     try {
       const { data, error } = await supabase
         .from(TABLES.CHECKLISTS)
-        .select('tasks')
+        .select('tasks, name')
         .eq('user_id', user.id)
         .single()
       
@@ -41,10 +41,14 @@ export default function Checklists() {
       if (data && data.tasks) {
         setTasks(data.tasks)
       } else {
-        // No existing data, create default row
+        // No existing data, create default row with a placeholder name
         const { error: insertError } = await supabase
           .from(TABLES.CHECKLISTS)
-          .insert([{ user_id: user.id, tasks: defaultTasks }])
+          .insert([{ 
+            user_id: user.id, 
+            tasks: defaultTasks,
+            name: 'My Checklists'
+          }])
         if (insertError) throw insertError
         setTasks(defaultTasks)
       }
@@ -63,7 +67,11 @@ export default function Checklists() {
     try {
       const { error } = await supabase
         .from(TABLES.CHECKLISTS)
-        .upsert({ user_id: user.id, tasks: newTasks }, { onConflict: 'user_id' })
+        .upsert({ 
+          user_id: user.id, 
+          tasks: newTasks,
+          name: 'My Checklists'
+        }, { onConflict: 'user_id' })
       if (error) throw error
     } catch (err) {
       console.error('Error saving checklists:', err)
