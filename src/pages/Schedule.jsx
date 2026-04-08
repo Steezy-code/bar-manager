@@ -103,8 +103,12 @@ export default function Schedule() {
       
       if (error) throw error
 
-      // Map to expected shape (already matches)
-      setTimeOff(data || [])
+      // Map month to zero‑indexed (DB may store 1‑indexed)
+      const mapped = (data || []).map(to => ({
+        ...to,
+        month: to.month >= 1 ? to.month - 1 : to.month,
+      }))
+      setTimeOff(mapped)
     } catch (err) {
       console.error('Error fetching time off:', err)
       alert('Failed to load time off from database.')

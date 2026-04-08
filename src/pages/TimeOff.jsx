@@ -9,7 +9,7 @@ export default function TimeOff() {
   const [approved, setApproved] = useState([])
   const [pending, setPending] = useState([])
   const [showAdd, setShowAdd] = useState(false)
-  const [newTimeOff, setNewTimeOff] = useState({ name: '', dates: '', days: '' })
+  const [newTimeOff, setNewTimeOff] = useState(() => ({ name: '', dates: '', days: '', month: new Date().getMonth(), year: new Date().getFullYear() }))
   const [loading, setLoading] = useState(true)
 
   // Fetch time off requests from Supabase
@@ -47,15 +47,13 @@ export default function TimeOff() {
       return
     }
 
-    const currentMonth = new Date().getMonth()
-    const currentYear = new Date().getFullYear()
     const requestToInsert = {
       name: newTimeOff.name,
       dates: newTimeOff.dates,
       days: newTimeOff.days,
       status: 'pending',
-      month: currentMonth,
-      year: currentYear,
+      month: newTimeOff.month,
+      year: newTimeOff.year,
       user_id: user.id
     }
 
@@ -210,6 +208,26 @@ export default function TimeOff() {
             <input placeholder="Staff name" className="input" value={newTimeOff.name} onChange={e => setNewTimeOff({...newTimeOff, name: e.target.value})} required />
             <input placeholder="Dates (e.g., March 15-17)" className="input" value={newTimeOff.dates} onChange={e => setNewTimeOff({...newTimeOff, dates: e.target.value})} required />
             <input placeholder="Day numbers (e.g., 15,16,17)" className="input" value={newTimeOff.days} onChange={e => setNewTimeOff({...newTimeOff, days: e.target.value})} required />
+            <div className="flex gap-2">
+              <select className="input flex-1" value={newTimeOff.month + 1} onChange={e => setNewTimeOff({...newTimeOff, month: parseInt(e.target.value) - 1})}>
+                <option value="1">January</option>
+                <option value="2">February</option>
+                <option value="3">March</option>
+                <option value="4">April</option>
+                <option value="5">May</option>
+                <option value="6">June</option>
+                <option value="7">July</option>
+                <option value="8">August</option>
+                <option value="9">September</option>
+                <option value="10">October</option>
+                <option value="11">November</option>
+                <option value="12">December</option>
+              </select>
+              <select className="input flex-1" value={newTimeOff.year} onChange={e => setNewTimeOff({...newTimeOff, year: parseInt(e.target.value)})}>
+                <option value={new Date().getFullYear()}>{new Date().getFullYear()}</option>
+                <option value={new Date().getFullYear() + 1}>{new Date().getFullYear() + 1}</option>
+              </select>
+            </div>
             <p className="text-gray-400 text-xs">Request goes to queue. Click Approve to add to schedule.</p>
             <div className="flex gap-2">
               <button type="button" onClick={() => setShowAdd(false)} className="btn-secondary flex-1">Cancel</button>
