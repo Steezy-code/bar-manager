@@ -47,6 +47,29 @@ const parseSupabaseDate = (dateStr) => {
   };
 }
 
+// Helper to convert weekday abbreviation (Sun, Mon, etc.) to day of month (1‑31) for given year/month
+// Returns the first occurrence of that weekday in the month
+const weekdayAbbrToDayOfMonth = (abbr, year, monthZeroIndexed) => {
+  const dayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const targetDow = dayMap[abbr.substring(0, 3)];
+  if (targetDow === undefined) return 1;
+  // Find first day of month that matches target weekday
+  for (let day = 1; day <= 7; day++) {
+    const date = new Date(year, monthZeroIndexed, day);
+    if (date.getDay() === targetDow) return day;
+  }
+  return 1; // fallback
+};
+
+// Parse day input (number or weekday abbreviation) to day of month (1‑31)
+const parseDay = (dayRaw, year, monthZeroIndexed) => {
+  if (!dayRaw) return 1;
+  const num = parseInt(dayRaw, 10);
+  if (!isNaN(num)) return Math.max(1, Math.min(num, 31));
+  // treat as weekday abbreviation
+  return weekdayAbbrToDayOfMonth(dayRaw, year, monthZeroIndexed);
+};
+
 export default function Schedule() {
   const { user, profile } = useAuth()
   const { hasRole } = usePermissions()
@@ -220,14 +243,19 @@ export default function Schedule() {
   }
 
   const exportCSV = () => {
-    const data = shifts.map(s => `${s.name},${s.day},${s.start},${s.end}`)
-    const csv = "Name,Day,Start,End\n" + data.join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `schedule-${currentYear}-${currentMonth + 1}.csv`
-    a.click()
+    const header = "Name,Day,Start,End,Role,Month,Year";
+    const data = shifts.map(s => {
+      const month = s.month !== undefined ? s.month + 1 : currentMonth + 1;
+      const year = s.year !== undefined ? s.year : currentYear;
+      return `${s.name},${s.day},${s.start},${s.end},${s.role || ''},${month},${year}`;
+    });
+    const csv = header + "\n" + data.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `schedule-export-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
   }
 
   const handleCopyWeek = () => {
@@ -251,45 +279,100 @@ export default function Schedule() {
     alert(`Copied ${added} shifts to ${months[copyToMonth]} (local only).`)
   }
 
-  const importCSV = (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-    
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      const text = event.target.result
-      const lines = text.split('\n').filter(l => l.trim())
-      
-      const dayMap = {Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6}
-      const newShifts = []
-      
-      lines.forEach((line, i) => {
-        if (i === 0) return
-        const parts = line.split(',').map(s => s.trim())
-        const name = parts[0]
-        const dayRaw = parts[1]
-        const start = parts[2] || '16:00'
-        const end = parts[3] || '23:00'
-        
-        if (name) {
-          let dayNum
-          if (isNaN(dayRaw)) {
-            const shortDay = dayRaw.substring(0, 3)
-            dayNum = dayMap[shortDay] !== undefined ? dayMap[shortDay] + 1 : 1
-          } else {
-            dayNum = parseInt(dayRaw)
+  const importCSV = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target.result;
+      const lines = text.split('\n').filter(l => l.trim());
+      if (lines.length < 2) {
+        alert('CSV file is empty or has no data rows.');
+        return;
+      }
+
+      // Parse header
+      const headers = lines[0].split(',').map(h => h.trim());
+      const nameIdx = headers.findIndex(h => h.toLowerCase() === 'name');
+      const dayIdx = headers.findIndex(h => h.toLowerCase() === 'day');
+      const startIdx = headers.findIndex(h => h.toLowerCase() === 'start');
+      const endIdx = headers.findIndex(h => h.toLowerCase() === 'end');
+      const roleIdx = headers.findIndex(h => h.toLowerCase() === 'role');
+      const monthIdx = headers.findIndex(h => h.toLowerCase() === 'month');
+      const yearIdx = headers.findIndex(h => h.toLowerCase() === 'year');
+
+      if (nameIdx === -1 || dayIdx === -1) {
+        alert('CSV must have at least "Name" and "Day" columns.');
+        return;
+      }
+
+      const shiftsToInsert = [];
+      const errors = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].split(',').map(p => p.trim());
+        const name = parts[nameIdx];
+        if (!name) continue; // skip empty rows
+
+        const dayRaw = parts[dayIdx] || '1';
+        const start = parts[startIdx] || '16:00';
+        const end = parts[endIdx] || '23:00';
+        const role = parts[roleIdx] || (profile?.role || 'staff');
+        let month = currentMonth;
+        let year = currentYear;
+
+        if (monthIdx !== -1 && parts[monthIdx]) {
+          const monthVal = parseInt(parts[monthIdx]);
+          if (!isNaN(monthVal) && monthVal >= 1 && monthVal <= 12) {
+            month = monthVal - 1; // convert to zero-indexed
           }
-          
-          newShifts.push({ name, day: dayNum, start, end, month: currentMonth, year: currentYear, id: Date.now() + i })
         }
-      })
-      
-      // For phase 1, CSV import will be local only
-      setShifts(prev => [...prev, ...newShifts])
-      alert(`Imported ${newShifts.length} shifts (local only).`)
-    }
-    reader.readAsText(file)
-    csvRef.current.value = ''
+        if (yearIdx !== -1 && parts[yearIdx]) {
+          const yearVal = parseInt(parts[yearIdx]);
+          if (!isNaN(yearVal) && yearVal >= 2000 && yearVal <= 2100) {
+            year = yearVal;
+          }
+        }
+
+        const day = parseDay(dayRaw, year, month);
+        const dateStr = formatDateForSupabase(year, month, day);
+
+        shiftsToInsert.push({
+          staff_name: name,
+          date: dateStr,
+          start_time: start,
+          end_time: end,
+          role: role,
+          user_id: user?.id,
+        });
+      }
+
+      if (shiftsToInsert.length === 0) {
+        alert('No valid shifts found in CSV.');
+        return;
+      }
+
+      try {
+        // Batch insert into Supabase
+        const { data, error } = await supabase
+          .from(TABLES.SHIFTS)
+          .insert(shiftsToInsert)
+          .select('*');
+
+        if (error) throw error;
+
+        // Refresh shifts from Supabase
+        await fetchShifts();
+        alert(`Successfully imported ${shiftsToInsert.length} shifts.`);
+      } catch (err) {
+        console.error('Error importing shifts:', err);
+        alert('Failed to import shifts. Check console for details.');
+      }
+    };
+
+    reader.readAsText(file);
+    csvRef.current.value = '';
   }
 
   const getMonthDays = () => {
