@@ -227,13 +227,46 @@ export default function Schedule() {
     })
   }
 
-  const clearAll = () => {
-    if (confirm('Clear ALL shifts and time off? This cannot be undone!')) {
-      // For phase 1, we won't implement bulk delete from Supabase
-      // Instead, we'll just clear local state (Supabase data unchanged)
-      setShifts([])
-      setTimeOff([])
-      alert('Shifts cleared locally. Supabase data unchanged.')
+  const clearAll = async () => {
+    if (!confirm('Clear ALL shifts and time off? This cannot be undone!')) return;
+
+    if (!hasRole('manager')) {
+      alert('Only managers can clear shifts.');
+      return;
+    }
+
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const startDate = formatDateForSupabase(currentYear, currentMonth, 1);
+    const endDate = formatDateForSupabase(currentYear, currentMonth, daysInMonth);
+
+    try {
+      // Delete shifts for the month
+      const { error: shiftError } = await supabase
+        .from(TABLES.SHIFTS)
+        .delete()
+        .gte('date', startDate)
+        .lte('date', endDate);
+
+      if (shiftError) throw shiftError;
+
+      // Delete approved time-off entries for the month
+      const { error: timeOffError } = await supabase
+        .from(TABLES.TIME_OFF)
+        .delete()
+        .eq('month', currentMonth)
+        .eq('year', currentYear)
+        .eq('status', 'approved');
+
+      if (timeOffError) throw timeOffError;
+
+      // Refresh UI
+      await fetchShifts();
+      await fetchTimeOff();
+
+      alert(`Cleared all shifts and time‑off for ${months[currentMonth]} ${currentYear}.`);
+    } catch (err) {
+      console.error('Error clearing schedule:', err);
+      alert('Failed to clear schedule. Check console for details.');
     }
   }
 
