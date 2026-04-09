@@ -385,10 +385,30 @@ export default function Schedule() {
 
   const { firstDay, daysInMonth } = getMonthDays()
   const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const monthName = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })
+  const getDisplayDate = () => {
+    if (view === 'week') {
+      const start = new Date(currentDate);
+      start.setDate(start.getDate() - start.getDay()); // Sunday
+      return start;
+    }
+    return currentDate;
+  };
+  const monthName = getDisplayDate().toLocaleString('default', { month: 'long', year: 'numeric' })
 
-  const prevMonth = () => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))
-  const nextMonth = () => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))
+  const prevView = () => {
+    if (view === 'week') {
+      setCurrentDate(new Date(currentDate.setDate(currentDate.getDate() - 7)))
+    } else {
+      setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))
+    }
+  }
+  const nextView = () => {
+    if (view === 'week') {
+      setCurrentDate(new Date(currentDate.setDate(currentDate.getDate() + 7)))
+    } else {
+      setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))
+    }
+  }
   const goToday = () => setCurrentDate(new Date())
 
   // Build list of days to show based on current view (week/month)
@@ -494,10 +514,10 @@ export default function Schedule() {
       
 
       <div className="flex items-center justify-center gap-3 flex-wrap">
-        <button onClick={prevMonth} className="p-2 bg-bar-card rounded-lg hover:bg-bar-blue transition-colors"><ChevronLeftIcon className="w-5 h-5" /></button>
+        <button onClick={prevView} className="p-2 bg-bar-card rounded-lg hover:bg-bar-blue transition-colors"><ChevronLeftIcon className="w-5 h-5" /></button>
         <button onClick={goToday} className="px-3 py-2 bg-bar-accent rounded-lg text-sm font-semibold hover:bg-bar-accent/80 transition-colors">Today</button>
         <h2 className="text-xl font-bold min-w-[200px] text-center">{monthName}</h2>
-        <button onClick={nextMonth} className="p-2 bg-bar-card rounded-lg hover:bg-bar-blue transition-colors"><ChevronRightIcon className="w-5 h-5" /></button>
+        <button onClick={nextView} className="p-2 bg-bar-card rounded-lg hover:bg-bar-blue transition-colors"><ChevronRightIcon className="w-5 h-5" /></button>
       </div>
 
       {view === 'week' ? (
