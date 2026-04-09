@@ -79,6 +79,9 @@ export default function Schedule() {
   const [timeOff, setTimeOff] = useState([])
   const [showAddShift, setShowAddShift] = useState(false)
   const [showCopyWeek, setShowCopyWeek] = useState(false)
+  const [showScheduleBuilder, setShowScheduleBuilder] = useState(false)
+  const [builderShifts, setBuilderShifts] = useState([])
+  const [profilesList, setProfilesList] = useState([])
   const [copyToMonth, setCopyToMonth] = useState(0)
   const [newShift, setNewShift] = useState({ name: '', day: 1, start: '16:00', end: '23:00' })
   const [loading, setLoading] = useState(true)
@@ -143,11 +146,117 @@ export default function Schedule() {
     }
   }, [])
 
+  const fetchProfiles = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.PROFILES)
+        .select('*')
+        .eq('status', 'approved')
+        .order('full_name', { ascending: true })
+      if (error) throw error
+      setProfilesList(data || [])
+    } catch (err) {
+      console.error('Error fetching profiles:', err)
+      alert('Failed to load staff list.')
+    }
+  }, [])
+
   // Fetch time off from Supabase (approved only)
   useEffect(() => {
     fetchShifts()
     fetchTimeOff()
-  }, [fetchShifts, fetchTimeOff])
+    fetchProfiles()
+  }, [fetchShifts, fetchTimeOff, fetchProfiles])
+
+  // Schedule Builder Functions
+  const loadExistingShifts = () => {
+    const existing = shifts.filter(s => s.year === currentYear && s.month === currentMonth)
+    const mapped = existing.map(s => ({
+      id: `builder-${s.id}`,
+      staffId: profilesList.find(p => p.full_name === s.name)?.id || '',
+      name: s.name,
+      day: s.day,
+      start: s.start,
+      end: s.end,
+      role: s.role || 'staff'
+    }))
+    setBuilderShifts(mapped)
+  }
+
+  const addEmptyShift = () => {
+    const newId = `temp-${Date.now()}-${Math.random()}`
+    setBuilderShifts(prev => [...prev, {
+      id: newId,
+      staffId: '',
+      name: '',
+      day: 1,
+      start: '16:00',
+      end: '23:00',
+      role: 'staff'
+    }])
+  }
+
+  const removeShift = (id) => {
+    setBuilderShifts(prev => prev.filter(s => s.id !== id))
+  }
+
+  const updateShift = (id, field, value) => {
+    setBuilderShifts(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s))
+  }
+
+  const generateSchedule = async () => {
+    if (!hasRole('manager')) {
+      alert('Only managers can generate schedules.')
+      return
+    }
+    if (!confirm(`Replace all shifts for ${months[currentMonth]} ${currentYear} with ${builderShifts.length} new shifts?`)) return
+
+    const shiftsToInsert = builderShifts.map(shift => {
+      const staffProfile = profilesList.find(p => p.id === shift.staffId)
+      return {
+        staff_name: staffProfile?.full_name || shift.name || 'Unknown',
+        date: formatDateForSupabase(currentYear, currentMonth, shift.day),
+        start_time: shift.start,
+        end_time: shift.end,
+        role: shift.role,
+        user_id: staffProfile?.id || user?.id
+      }
+    }).filter(s => s.staff_name && s.start_time && s.end_time)
+
+    if (shiftsToInsert.length === 0) {
+      alert('No valid shifts to insert.')
+      return
+    }
+
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
+    const startDate = formatDateForSupabase(currentYear, currentMonth, 1)
+    const endDate = formatDateForSupabase(currentYear, currentMonth, daysInMonth)
+
+    try {
+      // Delete existing shifts for the month
+      const { error: deleteError } = await supabase
+        .from(TABLES.SHIFTS)
+        .delete()
+        .gte('date', startDate)
+        .lte('date', endDate)
+      if (deleteError) throw deleteError
+
+      // Insert new shifts
+      const { data, error } = await supabase
+        .from(TABLES.SHIFTS)
+        .insert(shiftsToInsert)
+        .select('*')
+      if (error) throw error
+
+      // Refresh UI
+      await fetchShifts()
+      setShowScheduleBuilder(false)
+      alert(`Schedule generated with ${shiftsToInsert.length} shifts.`)
+    } catch (err) {
+      console.error('Error generating schedule:', err)
+      alert('Failed to generate schedule. Check console for details.')
+    }
+  }
 
   // Add Shift to Supabase
   const addShift = async (e) => {
@@ -528,6 +637,7 @@ export default function Schedule() {
               <button onClick={exportCSV} className="btn-secondary text-sm">📤 Export</button>
               <button onClick={() => setShowCopyWeek(true)} className="btn-secondary text-sm">📋 Copy Week</button>
               <button onClick={clearAll} className="btn-secondary text-sm text-red-400">🗑️ Clear</button>
+              <button onClick={() => setShowScheduleBuilder(true)} className="btn-secondary text-sm">🏗️ Build Month</button>
             </>
           )}
           <button onClick={printSchedule} className="btn-secondary text-sm">🖨️ Print</button>
@@ -745,6 +855,113 @@ export default function Schedule() {
               <button className="btn-primary flex-1">Add Shift</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {showScheduleBuilder && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-bar-card p-4 md:p-6 rounded-none md:rounded-xl w-full max-w-full md:max-w-lg mx-auto md:mx-0 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4">🏗️ Build Month Schedule</h2>
+            <p className="text-gray-400 mb-4">Create shifts for {monthName}.</p>
+            
+            <div className="flex flex-wrap gap-2 mb-6">
+              <button onClick={loadExistingShifts} className="btn-secondary text-sm">📥 Load Existing Shifts</button>
+              <button onClick={addEmptyShift} className="btn-primary text-sm">➕ Add Shift</button>
+            </div>
+            
+            <div className="space-y-4 mb-6">
+              {builderShifts.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  No shifts added yet. Click “Add Shift” to start.
+                </div>
+              ) : (
+                builderShifts.map(shift => (
+                  <div key={shift.id} className="bg-bar-blue/10 p-4 rounded-xl border border-bar-blue/20 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-semibold text-lg">Shift #{builderShifts.indexOf(shift) + 1}</h3>
+                      <button onClick={() => removeShift(shift.id)} className="text-red-500 hover:bg-red-500/20 p-1 rounded">
+                        <TrashIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {/* Day */}
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1">Day</label>
+                        <select 
+                          className="input w-full" 
+                          value={shift.day} 
+                          onChange={e => updateShift(shift.id, 'day', parseInt(e.target.value))}
+                        >
+                          {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      {/* Staff */}
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1">Staff</label>
+                        <select 
+                          className="input w-full" 
+                          value={shift.staffId} 
+                          onChange={e => updateShift(shift.id, 'staffId', e.target.value)}
+                        >
+                          <option value="">Select staff...</option>
+                          {profilesList.map(p => (
+                            <option key={p.id} value={p.id}>{p.full_name} ({p.role})</option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      {/* Start Time */}
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1">Start</label>
+                        <input 
+                          type="time" 
+                          className="input w-full" 
+                          value={shift.start} 
+                          onChange={e => updateShift(shift.id, 'start', e.target.value)}
+                        />
+                      </div>
+                      
+                      {/* End Time */}
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1">End</label>
+                        <input 
+                          type="time" 
+                          className="input w-full" 
+                          value={shift.end} 
+                          onChange={e => updateShift(shift.id, 'end', e.target.value)}
+                        />
+                      </div>
+                      
+                      {/* Role */}
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1">Role</label>
+                        <select 
+                          className="input w-full" 
+                          value={shift.role} 
+                          onChange={e => updateShift(shift.id, 'role', e.target.value)}
+                        >
+                          <option value="staff">Staff</option>
+                          <option value="bartender">Bartender</option>
+                          <option value="server">Server</option>
+                          <option value="cook">Cook</option>
+                          <option value="manager">Manager</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            <div className="flex gap-2 mt-6">
+              <button onClick={() => setShowScheduleBuilder(false)} className="btn-secondary flex-1">Cancel</button>
+              <button onClick={generateSchedule} className="btn-primary flex-1">Generate Schedule</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
