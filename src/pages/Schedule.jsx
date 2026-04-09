@@ -77,6 +77,7 @@ export default function Schedule() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [shifts, setShifts] = useState([])
   const [timeOff, setTimeOff] = useState([])
+  const [roleFilter, setRoleFilter] = useState('all') // all, bartender, server, cook, manager
   const [showAddShift, setShowAddShift] = useState(false)
   const [showCopyWeek, setShowCopyWeek] = useState(false)
   const [showScheduleBuilder, setShowScheduleBuilder] = useState(false)
@@ -566,7 +567,12 @@ export default function Schedule() {
         const year = dayDate.getFullYear()
         const month = dayDate.getMonth()
         const day = dayDate.getDate()
-        const dayShifts = shifts.filter(s => s.year === year && s.month === month && s.day === day)
+        const dayShifts = shifts.filter(s => 
+          s.year === year && 
+          s.month === month && 
+          s.day === day &&
+          (roleFilter === 'all' || s.role === roleFilter)
+        )
         const dayTimeOff = timeOff.filter(to => 
           to.year === year && 
           to.month === month && 
@@ -581,7 +587,12 @@ export default function Schedule() {
         const year = currentYear
         const month = currentMonth
         const day = i
-        const dayShifts = shifts.filter(s => s.year === year && s.month === month && s.day === day)
+        const dayShifts = shifts.filter(s => 
+          s.year === year && 
+          s.month === month && 
+          s.day === day &&
+          (roleFilter === 'all' || s.role === roleFilter)
+        )
         const dayTimeOff = timeOff.filter(to => 
           to.year === year && 
           to.month === month && 
@@ -661,6 +672,40 @@ export default function Schedule() {
         <button onClick={goToday} className="px-3 py-2 bg-bar-accent rounded-lg text-sm font-semibold hover:bg-bar-accent/80 transition-colors">Today</button>
         <h2 className="text-xl font-bold min-w-[200px] text-center">{monthName}</h2>
         <button onClick={nextView} className="p-2 bg-bar-card rounded-lg hover:bg-bar-blue transition-colors"><ChevronRightIcon className="w-5 h-5" /></button>
+      </div>
+
+      {/* Role filter tabs */}
+      <div className="flex gap-2 justify-center flex-wrap mt-4 mb-2">
+        <button 
+          onClick={() => setRoleFilter('all')} 
+          className={`px-4 py-2 rounded-lg ${roleFilter === 'all' ? 'bg-bar-accent font-semibold' : 'bg-bar-card hover:bg-bar-blue'}`}
+        >
+          All Roles
+        </button>
+        <button 
+          onClick={() => setRoleFilter('bartender')} 
+          className={`px-4 py-2 rounded-lg ${roleFilter === 'bartender' ? 'bg-bar-accent font-semibold' : 'bg-bar-card hover:bg-bar-blue'}`}
+        >
+          Bar
+        </button>
+        <button 
+          onClick={() => setRoleFilter('server')} 
+          className={`px-4 py-2 rounded-lg ${roleFilter === 'server' ? 'bg-bar-accent font-semibold' : 'bg-bar-card hover:bg-bar-blue'}`}
+        >
+          Server
+        </button>
+        <button 
+          onClick={() => setRoleFilter('cook')} 
+          className={`px-4 py-2 rounded-lg ${roleFilter === 'cook' ? 'bg-bar-accent font-semibold' : 'bg-bar-card hover:bg-bar-blue'}`}
+        >
+          Kitchen
+        </button>
+        <button 
+          onClick={() => setRoleFilter('manager')} 
+          className={`px-4 py-2 rounded-lg ${roleFilter === 'manager' ? 'bg-bar-accent font-semibold' : 'bg-bar-card hover:bg-bar-blue'}`}
+        >
+          Manager
+        </button>
       </div>
 
       {view === 'week' ? (

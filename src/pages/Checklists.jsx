@@ -21,6 +21,7 @@ export default function Checklists() {
   const [showNew, setShowNew] = useState(false)
   const [newL, setNewL] = useState('')
   const [loading, setLoading] = useState(true)
+  const [profilesList, setProfilesList] = useState([])
 
   // Fetch checklists from Supabase
   const fetchChecklists = useCallback(async () => {
@@ -30,11 +31,14 @@ export default function Checklists() {
     }
     setLoading(true)
     try {
+      // Fetch team checklist (team_id = 'main')
       const { data, error } = await supabase
         .from(TABLES.CHECKLISTS)
-        .select('tasks, name, date')
-        .eq('user_id', user.id)
-        .single()
+        .select('tasks, name, date, user_id')
+        .eq('team_id', 'main')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
       
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
         throw error
@@ -43,14 +47,15 @@ export default function Checklists() {
       if (data && data.tasks) {
         setTasks(data.tasks)
       } else {
-        // No existing data, create default row with required columns
+        // No team checklist exists, create one
         const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
         const { error: insertError } = await supabase
           .from(TABLES.CHECKLISTS)
           .insert([{ 
-            user_id: user.id, 
+            team_id: 'main',
+            user_id: user.id, // creator
             tasks: defaultTasks,
-            name: 'My Checklists',
+            name: 'Team Checklists',
             date: today
           }])
         if (insertError) throw insertError
@@ -64,20 +69,23 @@ export default function Checklists() {
     }
   }, [user])
 
-  // Save tasks to Supabase
+  // Save tasks to Supabase (team checklist)
   const save = async (newTasks) => {
     if (!user) return
     setTasks(newTasks)
     try {
       const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      // Update the team checklist row (team_id = 'main')
       const { error } = await supabase
         .from(TABLES.CHECKLISTS)
-        .upsert({ 
-          user_id: user.id, 
+        .update({ 
+          user_id: user.id, // last updated by
           tasks: newTasks,
-          name: 'My Checklists',
-          date: today
-        }, { onConflict: 'user_id' })
+          name: 'Team Checklists',
+          date: today,
+          updated_at: new Date().toISOString()
+        })
+        .eq('team_id', 'main')
       if (error) throw error
     } catch (err) {
       console.error('Error saving checklists:', err)
@@ -90,7 +98,25 @@ export default function Checklists() {
   }, [fetchChecklists])
 
   const toggle = id => {
-    const updated = {...tasks, [list]: tasks[list].map(t => t.id === id ? {...t,c:!t.c} : t)}
+    const updated = {...tasks, [list]: tasks[list].map(t => {
+      if (t.id === id) {
+        const newCompleted = !t.c
+        if (newCompleted) {
+          // Mark as completed: set completed_by and completed_at
+          return {
+            ...t,
+            c: true,
+            completed_by: user?.id || null,
+            completed_at: new Date().toISOString()
+          }
+        } else {
+          // Mark as incomplete: clear completion fields
+          const { completed_by, completed_at, ...rest } = t
+          return { ...rest, c: false }
+        }
+      }
+      return t
+    })}
     save(updated)
   }
   const addT = () => { 
