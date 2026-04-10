@@ -136,6 +136,7 @@ export default function Checklists() {
         name: isTeam ? 'Team Checklists' : 'My Checklists',
         date: today
       }
+      console.log('Saving checklists:', { isTeam, updateData })
       let query = supabase
         .from(TABLES.CHECKLISTS)
         .update(updateData)
@@ -145,7 +146,11 @@ export default function Checklists() {
         query = query.eq('user_id', user.id)
       }
       const { error } = await query
-      if (error) throw error
+      if (error) {
+        console.error('Supabase save error:', error)
+        throw error
+      }
+      console.log('Checklist saved successfully')
     } catch (err) {
       console.error('Error saving checklists:', err)
       alert('Failed to save checklists to database.')
@@ -164,20 +169,25 @@ export default function Checklists() {
         const newCompleted = !t.c
         if (newCompleted) {
           // Mark as completed: set completed_by and completed_at
+          const completed_by = user?.id || null
+          const completed_at = new Date().toISOString()
+          console.log(`Task ${id} completed by ${completed_by} at ${completed_at}`)
           return {
             ...t,
             c: true,
-            completed_by: user?.id || null,
-            completed_at: new Date().toISOString()
+            completed_by,
+            completed_at
           }
         } else {
           // Mark as incomplete: clear completion fields
           const { completed_by, completed_at, ...rest } = t
+          console.log(`Task ${id} marked incomplete`)
           return { ...rest, c: false }
         }
       }
       return t
     })}
+    console.log('Toggle -> saving updated tasks:', updated)
     save(updated)
   }
   const addT = () => { 
@@ -311,7 +321,7 @@ export default function Checklists() {
                 </div>
                 {t.c && (t.completed_by || t.completed_at) && (
                   <div className="text-xs text-gray-400 mt-1 ml-9">
-                    Completed by {getCompletedByName(t.completed_by)} at {formatCompletedTime(t.completed_at)}
+                    Completed by {getCompletedByName(t.completed_by)} on {formatCompletedTime(t.completed_at)}
                   </div>
                 )}
               </div>
