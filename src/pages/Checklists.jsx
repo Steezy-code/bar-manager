@@ -22,6 +22,7 @@ export default function Checklists() {
   const [newL, setNewL] = useState('')
   const [loading, setLoading] = useState(true)
   const [profilesList, setProfilesList] = useState([])
+  const [checklistMode, setChecklistMode] = useState('team') // 'team' or 'user'
 
   // Fetch checklists from Supabase
   const fetchChecklists = useCallback(async () => {
@@ -31,7 +32,7 @@ export default function Checklists() {
     }
     setLoading(true)
     try {
-      // Fetch team checklist (team_id = 'main')
+      // Try team checklist (team_id = 'main') – assumes migration applied
       const { data, error } = await supabase
         .from(TABLES.CHECKLISTS)
         .select('tasks, name, date, user_id')
@@ -40,12 +41,50 @@ export default function Checklists() {
         .limit(1)
         .maybeSingle()
       
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-        throw error
+      if (error) {
+        // If error mentions column "team_id", fall back to user‑based checklist
+        if (error.message && error.message.includes('team_id')) {
+          console.warn('team_id column not found, falling back to user‑based checklist')
+          // Fetch user's personal checklist
+          const { data: userData, error: userError } = await supabase
+            .from(TABLES.CHECKLISTS)
+            .select('tasks, name, date')
+            .eq('user_id', user.id)
+            .single()
+          
+          if (userError && userError.code !== 'PGRST116') {
+            throw userError
+          }
+          
+          if (userData && userData.tasks) {
+            setTasks(userData.tasks)
+            setChecklistMode('user')
+          } else {
+            // No personal checklist, create one
+            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+            const { error: insertError } = await supabase
+              .from(TABLES.CHECKLISTS)
+              .insert([{ 
+                user_id: user.id, 
+                tasks: defaultTasks,
+                name: 'My Checklists',
+                date: today
+              }])
+            if (insertError) throw insertError
+            setTasks(defaultTasks)
+            setChecklistMode('user')
+          }
+          return
+        } else if (error.code !== 'PGRST116') {
+          // Some other error
+          throw error
+        }
+        // PGRST116 = no rows returned, create team checklist
       }
       
       if (data && data.tasks) {
         setTasks(data.tasks)
+        setChecklistMode('team')
       } else {
         // No team checklist exists, create one
         const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
@@ -60,6 +99,7 @@ export default function Checklists() {
           }])
         if (insertError) throw insertError
         setTasks(defaultTasks)
+        setChecklistMode('team')
       }
     } catch (err) {
       console.error('Error fetching checklists:', err)
@@ -69,23 +109,42 @@ export default function Checklists() {
     }
   }, [user])
 
+  const fetchProfiles = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.PROFILES)
+        .select('id, full_name')
+        .eq('status', 'approved')
+        .order('full_name', { ascending: true })
+      if (error) throw error
+      setProfilesList(data || [])
+    } catch (err) {
+      console.error('Error fetching profiles:', err)
+    }
+  }, [])
+
   // Save tasks to Supabase (team checklist)
   const save = async (newTasks) => {
     if (!user) return
     setTasks(newTasks)
     try {
       const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-      // Update the team checklist row (team_id = 'main')
-      const { error } = await supabase
+      const isTeam = checklistMode === 'team'
+      const updateData = { 
+        user_id: user.id, // last updated by
+        tasks: newTasks,
+        name: isTeam ? 'Team Checklists' : 'My Checklists',
+        date: today
+      }
+      let query = supabase
         .from(TABLES.CHECKLISTS)
-        .update({ 
-          user_id: user.id, // last updated by
-          tasks: newTasks,
-          name: 'Team Checklists',
-          date: today,
-          updated_at: new Date().toISOString()
-        })
-        .eq('team_id', 'main')
+        .update(updateData)
+      if (isTeam) {
+        query = query.eq('team_id', 'main')
+      } else {
+        query = query.eq('user_id', user.id)
+      }
+      const { error } = await query
       if (error) throw error
     } catch (err) {
       console.error('Error saving checklists:', err)
@@ -95,10 +154,12 @@ export default function Checklists() {
 
   useEffect(() => {
     fetchChecklists()
-  }, [fetchChecklists])
+    fetchProfiles()
+  }, [fetchChecklists, fetchProfiles])
 
   const toggle = id => {
-    const updated = {...tasks, [list]: tasks[list].map(t => {
+    const currentTasks = tasks[list] || []
+    const updated = {...tasks, [list]: currentTasks.map(t => {
       if (t.id === id) {
         const newCompleted = !t.c
         if (newCompleted) {
@@ -121,12 +182,14 @@ export default function Checklists() {
   }
   const addT = () => { 
     if(!newT) return
-    const updated = {...tasks, [list]: [...tasks[list],{id:Date.now(),t:newT,c:false}]}
+    const currentTasks = tasks[list] || []
+    const updated = {...tasks, [list]: [...currentTasks,{id:Date.now(),t:newT,c:false}]}
     save(updated)
     setNewT('')
   }
   const delT = id => {
-    const updated = {...tasks, [list]: tasks[list].filter(t => t.id !== id)}
+    const currentTasks = tasks[list] || []
+    const updated = {...tasks, [list]: currentTasks.filter(t => t.id !== id)}
     save(updated)
   }
   const addL = () => { 
@@ -149,6 +212,19 @@ export default function Checklists() {
 
   const printChecklist = () => {
     window.print()
+  }
+
+  // Helper functions for name stamps
+  const getCompletedByName = (userId) => {
+    const profile = profilesList.find(p => p.id === userId)
+    return profile ? profile.full_name : 'Unknown'
+  }
+
+  const formatCompletedTime = (isoString) => {
+    if (!isoString) return ''
+    const date = new Date(isoString)
+    // Show local date/time in a compact format
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
   }
 
   if (loading) {
@@ -224,13 +300,20 @@ export default function Checklists() {
               key={t.id} 
               className={`checklist-item flex items-center gap-3 p-3 rounded-lg ${t.c?'bg-green-500/20':'bg-bar-blue'}`}
             >
-              <div onClick={() => toggle(t.id)} className="flex-1 flex items-center gap-3 cursor-pointer">
-                {t.c ? (
-                  <CheckCircleIcon className="w-6 h-6 text-green-500"/>
-                ) : (
-                  <div className="w-6 h-6 rounded-full border-2"/>
+              <div onClick={() => toggle(t.id)} className="flex-1 cursor-pointer">
+                <div className="flex items-center gap-3">
+                  {t.c ? (
+                    <CheckCircleIcon className="w-6 h-6 text-green-500"/>
+                  ) : (
+                    <div className="w-6 h-6 rounded-full border-2"/>
+                  )}
+                  <span className={t.c?'line-through text-gray-400':''}>{t.t}</span>
+                </div>
+                {t.c && (t.completed_by || t.completed_at) && (
+                  <div className="text-xs text-gray-400 mt-1 ml-9">
+                    Completed by {getCompletedByName(t.completed_by)} at {formatCompletedTime(t.completed_at)}
+                  </div>
                 )}
-                <span className={t.c?'line-through text-gray-400':''}>{t.t}</span>
               </div>
               {edit && (
                 <button onClick={() => delT(t.id)} className="text-red-500">
