@@ -1,16 +1,23 @@
 -- Add team checklists support
 -- 1. Add team_id column (default 'main' for existing rows)
 ALTER TABLE checklists ADD COLUMN IF NOT EXISTS team_id TEXT DEFAULT 'main';
+-- Ensure all existing rows have team_id = 'main'
+UPDATE checklists SET team_id = 'main' WHERE team_id IS NULL;
 
 -- 2. Add completed_by and completed_at columns to tasks JSONB (will be handled by frontend)
 -- No schema change needed; frontend will store these fields in the tasks JSON.
 
 -- 3. Update RLS policies to allow all authenticated staff to read/write team checklists
--- Drop existing policies (they will be recreated below)
+-- Drop existing per‑user policies (they will be replaced by team policies)
 DROP POLICY IF EXISTS "Allow users to read own checklist" ON checklists;
 DROP POLICY IF EXISTS "Allow users to insert own checklist" ON checklists;
 DROP POLICY IF EXISTS "Allow users to update own checklist" ON checklists;
-DROP POLICY IF EXISTS "Allow admin/manager all operations" ON checklists;
+-- Drop any previously created team policies (if this migration ran before)
+DROP POLICY IF EXISTS "Allow staff to read team checklists" ON checklists;
+DROP POLICY IF EXISTS "Allow staff to insert team checklists" ON checklists;
+DROP POLICY IF EXISTS "Allow staff to update team checklists" ON checklists;
+
+-- Note: Keep the admin/manager policy (created by previous migration) – it stays.
 
 -- New policy: any authenticated user can read team checklists (team_id = 'main')
 CREATE POLICY "Allow staff to read team checklists" ON checklists FOR SELECT
