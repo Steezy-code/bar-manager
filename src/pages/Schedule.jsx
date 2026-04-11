@@ -683,12 +683,6 @@ export default function Schedule() {
           All Roles
         </button>
         <button 
-          onClick={() => setRoleFilter('staff')} 
-          className={`px-4 py-2 rounded-lg ${roleFilter === 'staff' ? 'bg-bar-accent font-semibold' : 'bg-bar-card hover:bg-bar-blue'}`}
-        >
-          Staff
-        </button>
-        <button 
           onClick={() => setRoleFilter('bartender')} 
           className={`px-4 py-2 rounded-lg ${roleFilter === 'bartender' ? 'bg-bar-accent font-semibold' : 'bg-bar-card hover:bg-bar-blue'}`}
         >
