@@ -86,6 +86,7 @@ export default function Schedule() {
   const [copyToMonth, setCopyToMonth] = useState(0)
   const [newShift, setNewShift] = useState({ name: '', day: 1, start: '16:00', end: '23:00' })
   const [loading, setLoading] = useState(true)
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
   const csvRef = useRef(null)
 
   const currentMonth = currentDate.getMonth()
@@ -639,9 +640,12 @@ export default function Schedule() {
 
   return (
     <div className="space-y-6 pb-24 lg:pb-0">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Schedule</h1>
-        <div className="flex gap-2 flex-wrap print:hidden">
+      <div className="flex justify-between items-start gap-3 flex-col md:flex-row">
+        <div>
+          <h1 className="text-2xl font-bold">Schedule</h1>
+          <p className="text-sm text-gray-400">Mobile-friendly day cards</p>
+        </div>
+        <div className="flex gap-2 flex-wrap print:hidden w-full md:w-auto">
           {hasRole('manager') && (
             <>
               <button onClick={() => csvRef.current.click()} className="btn-secondary text-sm">📥 Import</button>
@@ -667,15 +671,15 @@ export default function Schedule() {
 
       
 
-      <div className="flex items-center justify-center gap-3 flex-wrap">
-        <button onClick={prevView} className="p-2 bg-bar-card rounded-lg hover:bg-bar-blue transition-colors"><ChevronLeftIcon className="w-5 h-5" /></button>
-        <button onClick={goToday} className="px-3 py-2 bg-bar-accent rounded-lg text-sm font-semibold hover:bg-bar-accent/80 transition-colors">Today</button>
-        <h2 className="text-xl font-bold min-w-[200px] text-center">{monthName}</h2>
-        <button onClick={nextView} className="p-2 bg-bar-card rounded-lg hover:bg-bar-blue transition-colors"><ChevronRightIcon className="w-5 h-5" /></button>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <button onClick={prevView} className="p-3 bg-bar-card rounded-lg min-w-12"><ChevronLeftIcon className="w-5 h-5" /></button>
+        <button onClick={goToday} className="px-4 py-3 bg-bar-accent rounded-lg text-sm font-semibold">Today</button>
+        <h2 className="text-lg md:text-xl font-bold text-center flex-1 min-w-[180px]">{monthName}</h2>
+        <button onClick={nextView} className="p-3 bg-bar-card rounded-lg min-w-12"><ChevronRightIcon className="w-5 h-5" /></button>
       </div>
 
       {/* Role filter tabs */}
-      <div className="flex gap-2 justify-center flex-wrap mt-4 mb-2">
+      <div className="flex gap-2 overflow-x-auto pb-1 md:justify-center md:flex-wrap">
         <button 
           onClick={() => setRoleFilter('all')} 
           className={`px-4 py-2 rounded-lg ${roleFilter === 'all' ? 'bg-bar-accent font-semibold' : 'bg-bar-card hover:bg-bar-blue'}`}
@@ -710,7 +714,6 @@ export default function Schedule() {
 
       {view === 'week' ? (
         <div className="space-y-6">
-          {/* Day‑stacked list for week view */}
           {(() => {
             const days = getDaysToShow()
             const anyShiftsOrTimeOff = days.some(day => day.shifts.length > 0 || day.timeOff.length > 0)
@@ -790,7 +793,6 @@ export default function Schedule() {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Day‑stacked list (mobile: single column, desktop: multi‑column) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {getDaysToShow().map(({ date, shifts: dayShifts, timeOff: dayTimeOff }) => {
               const dayKey = date.toISOString().split('T')[0]
@@ -886,8 +888,8 @@ export default function Schedule() {
       )}
 
       {showAddShift && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <form onSubmit={addShift} className="bg-bar-card p-4 md:p-6 rounded-none md:rounded-xl w-full max-w-full md:max-w-md space-y-3 mx-auto md:mx-0">
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 z-50">
+          <form onSubmit={addShift} className="bg-bar-card p-4 md:p-6 rounded-t-2xl md:rounded-xl w-full max-w-full md:max-w-md space-y-3 mx-auto md:mx-0">
             <h2 className="text-xl font-bold">Add Shift for {monthName}</h2>
             <input placeholder="Staff name" className="input" value={newShift.name} onChange={e => setNewShift({...newShift, name: e.target.value})} required />
             <input type="number" min="1" max={daysInMonth} placeholder={`Day (1-${daysInMonth})`} className="input" value={newShift.day} onChange={e => setNewShift({...newShift, day: +e.target.value})} />
@@ -904,8 +906,8 @@ export default function Schedule() {
       )}
 
       {showScheduleBuilder && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-bar-card p-4 md:p-6 rounded-none md:rounded-xl w-full max-w-full md:max-w-lg mx-auto md:mx-0 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 z-50">
+          <div className="bg-bar-card p-4 md:p-6 rounded-t-2xl md:rounded-xl w-full max-w-full md:max-w-lg mx-auto md:mx-0 max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4">🏗️ Build Month Schedule</h2>
             <p className="text-gray-400 mb-4">Create shifts for {monthName}.</p>
             
