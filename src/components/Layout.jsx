@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { HomeIcon, CubeIcon, CalendarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, Cog6ToothIcon, Bars3Icon, XMarkIcon, UserIcon, ArrowRightOnRectangleIcon, ShieldCheckIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../context/AuthContext'
+import { usePermissions } from '../hooks/usePermissions'
 
 const navItems = [
   { name: 'Dashboard', path: '/', icon: HomeIcon },
@@ -16,6 +17,7 @@ export default function Layout({ user, onLogout }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const navigate = useNavigate()
   const { profile } = useAuth()
+  const { hasRole, isApproved } = usePermissions()
 
   const handleLogout = async () => {
     if (onLogout) {
@@ -24,9 +26,8 @@ export default function Layout({ user, onLogout }) {
     navigate('/login')
   }
 
-  // Add admin nav item if user is admin
   const allNavItems = [...navItems]
-  if (profile?.role === 'admin') {
+  if (isApproved && hasRole('admin')) {
     allNavItems.push({ name: 'Admin', path: '/admin', icon: ShieldCheckIcon })
   }
 
@@ -56,7 +57,7 @@ export default function Layout({ user, onLogout }) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{user.email}</p>
-                <p className="text-xs text-gray-500">Role: {profile?.role || 'viewer'}</p>
+                <p className="text-xs text-gray-500">Role: {profile?.role || 'viewer'} · {profile?.status || 'pending'}</p>
               </div>
             </div>
             <button

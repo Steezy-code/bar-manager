@@ -8,12 +8,11 @@ export default function PendingApproval() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    // If not logged in, redirect to login
     if (!user) {
       navigate('/login')
       return
     }
-    // If profile is approved, redirect to dashboard
+
     if (profile?.status === 'approved') {
       navigate('/')
     }
@@ -31,13 +30,19 @@ export default function PendingApproval() {
           <ClockIcon className="w-8 h-8 text-white" />
         </div>
         
-        <h1 className="text-2xl font-bold mb-2">Waiting for Approval</h1>
+        <h1 className="text-2xl font-bold mb-2">
+          {profile?.status === 'rejected' ? 'Access Not Approved' : 'Waiting for Approval'}
+        </h1>
         <p className="text-gray-400 mb-6">
-          Your account ({user?.email}) is pending approval from an administrator.
+          {profile?.status === 'rejected'
+            ? `Your account (${user?.email}) was not approved for access.`
+            : `Your account (${user?.email}) is pending approval from an administrator.`}
         </p>
         
         <p className="text-gray-500 text-sm mb-6">
-          You'll be able to access the app once an admin approves your account.
+          {profile?.status === 'rejected'
+            ? 'Ask an administrator to review your role or account status.'
+            : "You'll be able to access the app once an admin approves your account."}
         </p>
         
         <button

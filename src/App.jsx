@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { usePermissions } from './hooks/usePermissions';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
 import Schedule from './pages/Schedule';
@@ -12,27 +13,34 @@ import PendingApproval from './pages/PendingApproval';
 import Admin from './pages/Admin';
 import Layout from './components/Layout';
 
-// Protected wrapper that checks auth and status
+// Protected wrapper that checks auth, approval status, and role hierarchy
 const ProtectedRoute = ({ children, requiredRole }) => {
-  const { user, profile, loading } = useAuth();
+  const { user, loading } = useAuth();
+  const { profile } = useAuth();
+  const { hasRole, isPending, isRejected } = usePermissions();
 
   if (loading) {
     return <div className="min-h-screen bg-bar-dark flex items-center justify-center">Loading...</div>;
   }
 
   if (!user) {
-    return <Navigate to="/login" />;
+    return <Navigate to="/login" replace />;
   }
 
-  // Check status
-  if (profile?.status === 'pending') {
-    return <Navigate to="/pending-approval" />;
+  if (!profile) {
+    return <div className="min-h-screen bg-bar-dark flex items-center justify-center">Loading profile...</div>;
   }
 
-  // Optionally check role (if requiredRole provided)
-  if (requiredRole && profile?.role !== requiredRole) {
-    // If user doesn't have required role, redirect to dashboard (or show unauthorized)
-    return <Navigate to="/" />;
+  if (isPending) {
+    return <Navigate to="/pending-approval" replace />;
+  }
+
+  if (isRejected) {
+    return <Navigate to="/pending-approval" replace />;
+  }
+
+  if (requiredRole && !hasRole(requiredRole)) {
+    return <Navigate to="/" replace />;
   }
 
   return children;
@@ -42,12 +50,18 @@ const ProtectedRoute = ({ children, requiredRole }) => {
 const AppRouter = () => {
   const { user, profile, signOut } = useAuth();
 
+  const homeDestination = !user
+    ? '/login'
+    : profile?.status === 'approved'
+      ? '/'
+      : '/pending-approval';
+
   return (
     <Routes>
       {/* Public routes */}
-      <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
-      <Route path="/signup" element={!user ? <SignUp /> : <Navigate to="/" />} />
-      <Route path="/pending-approval" element={<PendingApproval />} />
+      <Route path="/login" element={!user ? <Login /> : <Navigate to={homeDestination} replace />} />
+      <Route path="/signup" element={!user ? <SignUp /> : <Navigate to={homeDestination} replace />} />
+      <Route path="/pending-approval" element={user ? <PendingApproval /> : <Navigate to="/login" replace />} />
       
       {/* Protected routes */}
       <Route path="/" element={
