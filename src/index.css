@@ -8,6 +8,28 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
 }
 
+@media (max-width: 640px) {
+  .mobile-stack {
+    flex-direction: column !important;
+  }
+
+  .mobile-full {
+    width: 100% !important;
+  }
+
+  .mobile-hide {
+    display: none !important;
+  }
+
+  .mobile-large-hit {
+    min-height: 48px;
+  }
+
+  .mobile-tight {
+    gap: 0.5rem !important;
+  }
+}
+
 /* Print Styles - Ink Friendly */
 @media print {
   @page {

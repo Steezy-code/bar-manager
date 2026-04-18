@@ -27,13 +27,13 @@ export default function Login({ onLogin }) {
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-sm text-gray-400 mb-1">Email</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input" placeholder="you@bar.com" required />
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input mobile-large-hit" placeholder="you@bar.com" required />
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">Password</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input" placeholder="••••••••" required />
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input mobile-large-hit" placeholder="••••••••" required />
             </div>
-            <button type="submit" disabled={loading} className="btn-primary w-full py-3 disabled:opacity-50">
+            <button type="submit" disabled={loading} className="btn-primary w-full py-3 mobile-large-hit disabled:opacity-50">
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>

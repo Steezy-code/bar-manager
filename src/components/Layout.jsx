@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink } from 'react-router-dom'
 import { HomeIcon, CubeIcon, CalendarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, Cog6ToothIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
 
 const navItems = [
@@ -11,7 +11,7 @@ const navItems = [
   { name: 'Settings', path: '/settings', icon: Cog6ToothIcon },
 ]
 
-export default function Layout({ user, onLogout }) {
+export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
@@ -30,13 +30,12 @@ export default function Layout({ user, onLogout }) {
             </NavLink>
           ))}
         </nav>
-        
       </div>
       <div className="lg:ml-64 print:ml-0">
         <header className="lg:hidden flex items-center justify-between p-4 bg-bar-card border-b border-bar-blue print:hidden">
-          <button onClick={() => setSidebarOpen(true)}><Bars3Icon className="w-6 h-6" /></button>
+          <button onClick={() => setSidebarOpen(true)} className="p-2 -ml-2"><Bars3Icon className="w-6 h-6" /></button>
           <h1 className="text-lg font-bold text-bar-accent">BarManager</h1>
-          <div className="w-6" />
+          <div className="w-10" />
         </header>
         <main className="p-4 pb-24 lg:p-8 print:p-2"><Outlet /></main>
       </div>

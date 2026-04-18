@@ -20,25 +20,35 @@ export default function PendingApproval() {
 
   return (
     <div className="min-h-screen bg-bar-dark flex items-center justify-center p-4">
-      <div className="w-full max-w-md text-center">
-        <div className="w-16 h-16 bg-yellow-500 rounded-full flex items-center justify-center mx-auto mb-4">
+      <div className="w-full max-w-md text-center space-y-6">
+        <div className="w-16 h-16 bg-yellow-500 rounded-full flex items-center justify-center mx-auto">
           <ClockIcon className="w-8 h-8 text-white" />
         </div>
-        
-        <h1 className="text-2xl font-bold mb-2">Waiting for Approval</h1>
-        <p className="text-gray-400 mb-6">
-          Your account ({email}) is pending approval from an administrator.
-        </p>
-        
-        <p className="text-gray-500 text-sm mb-6">
-          You'll be able to access the app once an admin approves your account.
-        </p>
-        
+
+        <div className="space-y-2">
+          <h1 className="text-2xl font-bold">Waiting for Approval</h1>
+          <p className="text-gray-400">
+            Your account ({email}) is pending approval from an administrator.
+          </p>
+          <p className="text-gray-500 text-sm">
+            You’ll be able to access the app once an admin approves your account.
+          </p>
+        </div>
+
+        <div className="card text-left space-y-3">
+          <p className="text-sm text-gray-400">What happens next:</p>
+          <ul className="space-y-2 text-sm text-gray-300 list-disc pl-5">
+            <li>An admin reviews your account</li>
+            <li>You’ll get access when it’s approved</li>
+            <li>Come back later and sign in again</li>
+          </ul>
+        </div>
+
         <button
           onClick={handleLogout}
-          className="text-gray-400 hover:text-white underline"
+          className="btn-secondary w-full mobile-large-hit"
         >
-          Sign out and try again later
+          Sign out for now
         </button>
       </div>
     </div>
