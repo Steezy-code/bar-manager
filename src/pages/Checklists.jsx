@@ -14,6 +14,7 @@ const defaultTasks = {
 export default function Checklists() {
   const { user } = useAuth()
   const { hasRole } = usePermissions()
+  const canOverrideCompletion = hasRole('manager')
   const [list, setList] = useState('opening')
   const [tasks, setTasks] = useState(defaultTasks)
   const [edit, setEdit] = useState(false)
@@ -164,11 +165,19 @@ export default function Checklists() {
 
   const toggle = id => {
     const currentTasks = tasks[list] || []
+    const task = currentTasks.find(t => t.id === id)
+
+    if (!task) return
+
+    if (task.c && task.completed_by && task.completed_by !== user?.id && !canOverrideCompletion) {
+      alert('Only the person who completed this task or a manager can change it.')
+      return
+    }
+
     const updated = {...tasks, [list]: currentTasks.map(t => {
       if (t.id === id) {
         const newCompleted = !t.c
         if (newCompleted) {
-          // Mark as completed: set completed_by and completed_at
           const completed_by = user?.id || null
           const completed_at = new Date().toISOString()
           console.log(`Task ${id} completed by ${completed_by} at ${completed_at}`)
@@ -179,7 +188,6 @@ export default function Checklists() {
             completed_at
           }
         } else {
-          // Mark as incomplete: clear completion fields
           const { completed_by, completed_at, ...rest } = t
           console.log(`Task ${id} marked incomplete`)
           return { ...rest, c: false }
@@ -310,7 +318,7 @@ export default function Checklists() {
               key={t.id} 
               className={`checklist-item flex items-center gap-3 p-3 rounded-lg ${t.c?'bg-green-500/20':'bg-bar-blue'}`}
             >
-              <div onClick={() => toggle(t.id)} className="flex-1 cursor-pointer">
+              <div onClick={() => toggle(t.id)} className={`flex-1 ${t.c && t.completed_by && t.completed_by !== user?.id && !canOverrideCompletion ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                 <div className="flex items-center gap-3">
                   {t.c ? (
                     <CheckCircleIcon className="w-6 h-6 text-green-500"/>
@@ -322,6 +330,7 @@ export default function Checklists() {
                 {t.c && (t.completed_by || t.completed_at) && (
                   <div className="text-xs text-gray-400 mt-1 ml-9">
                     Completed by {getCompletedByName(t.completed_by)} on {formatCompletedTime(t.completed_at)}
+                    {t.completed_by && t.completed_by !== user?.id && !canOverrideCompletion ? ' · Locked to original completer' : ''}
                   </div>
                 )}
               </div>
