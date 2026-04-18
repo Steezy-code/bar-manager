@@ -3,9 +3,12 @@ import { TrashIcon, PlusIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/o
 import { supabase } from '../lib/supabase'
 import { TABLES } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { usePermissions } from '../hooks/usePermissions'
 
 export default function TimeOff() {
   const { user } = useAuth()
+  const { hasRole, isApproved } = usePermissions()
+  const canManageRequests = hasRole('manager')
   const [approved, setApproved] = useState([])
   const [pending, setPending] = useState([])
   const [showAdd, setShowAdd] = useState(false)
@@ -85,6 +88,11 @@ export default function TimeOff() {
 
   // Approve request
   const approveRequest = async (request) => {
+    if (!canManageRequests) {
+      alert('Only managers can approve time off requests.')
+      return
+    }
+
     try {
       const { error } = await supabase
         .from(TABLES.TIME_OFF)
@@ -103,6 +111,11 @@ export default function TimeOff() {
 
   // Deny request (delete)
   const denyRequest = async (id) => {
+    if (!canManageRequests) {
+      alert('Only managers can deny time off requests.')
+      return
+    }
+
     if (!confirm('Deny this time off request?')) return
 
     try {
@@ -121,6 +134,11 @@ export default function TimeOff() {
 
   // Remove approved request (delete)
   const removeApproved = async (id) => {
+    if (!canManageRequests) {
+      alert('Only managers can remove approved time off.')
+      return
+    }
+
     if (!confirm('Remove this approved time off?')) return
 
     try {
@@ -158,11 +176,15 @@ export default function TimeOff() {
       <div className="flex justify-between">
         <div>
           <h1 className="text-2xl font-bold">Time Off</h1>
-          <p className="text-gray-400 text-sm">Review requests → Approve to add to schedule</p>
+          <p className="text-gray-400 text-sm">
+            {canManageRequests ? 'Review requests → Approve to add to schedule' : 'Submit requests and view approved time off'}
+          </p>
         </div>
-        <button onClick={() => setShowAdd(true)} className="btn-primary">
-          <PlusIcon className="w-4 h-4" /> Add Request
-        </button>
+        {isApproved && (
+          <button onClick={() => setShowAdd(true)} className="btn-primary">
+            <PlusIcon className="w-4 h-4" /> Add Request
+          </button>
+        )}
       </div>
 
       {pending.length > 0 && (
@@ -175,14 +197,18 @@ export default function TimeOff() {
                   <div className="font-semibold">{t.name}</div>
                   <div className="text-sm text-gray-400">{t.dates} (Days: {t.days})</div>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => approveRequest(t)} className="p-2 bg-green-600 rounded text-white hover:bg-green-500">
-                    <CheckIcon className="w-5 h-5" /> Approve
-                  </button>
-                  <button onClick={() => denyRequest(t.id)} className="p-2 bg-red-600 rounded text-white hover:bg-red-500">
-                    <XMarkIcon className="w-5 h-5" /> Deny
-                  </button>
-                </div>
+                {canManageRequests ? (
+                  <div className="flex gap-2">
+                    <button onClick={() => approveRequest(t)} className="p-2 bg-green-600 rounded text-white hover:bg-green-500">
+                      <CheckIcon className="w-5 h-5" /> Approve
+                    </button>
+                    <button onClick={() => denyRequest(t.id)} className="p-2 bg-red-600 rounded text-white hover:bg-red-500">
+                      <XMarkIcon className="w-5 h-5" /> Deny
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-xs text-gray-400">Manager approval required</span>
+                )}
               </div>
             ))}
           </div>
@@ -201,9 +227,11 @@ export default function TimeOff() {
                   <div className="font-semibold">{t.name}</div>
                   <div className="text-sm text-gray-400">{t.dates} (Days: {t.days})</div>
                 </div>
-                <button onClick={() => removeApproved(t.id)} className="p-2 text-red-500">
-                  <TrashIcon className="w-5 h-5" />
-                </button>
+                {canManageRequests ? (
+                  <button onClick={() => removeApproved(t.id)} className="p-2 text-red-500">
+                    <TrashIcon className="w-5 h-5" />
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>
