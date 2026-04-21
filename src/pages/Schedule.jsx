@@ -103,6 +103,14 @@ export default function Schedule() {
   const [newShift, setNewShift] = useState({ name: '', day: 1, start: '16:00', end: '23:00' })
   const [loading, setLoading] = useState(true)
   const csvRef = useRef(null)
+  const [showPatternModal, setShowPatternModal] = useState(false)
+  const [patternShift, setPatternShift] = useState({ 
+    staffId: '', 
+    role: 'staff', 
+    start: '16:00', 
+    end: '23:00', 
+    days: [1, 2, 3, 4, 5] // Monday–Friday (0=Sunday)
+  })
 
   const currentMonth = currentDate.getMonth()
   const currentYear = currentDate.getFullYear()
@@ -219,6 +227,63 @@ export default function Schedule() {
 
   const updateShift = (id, field, value) => {
     setBuilderShifts(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s))
+  }
+
+  const copyLastMonth = () => {
+    const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1
+    const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear
+    const prevShifts = shifts.filter(s => s.year === prevYear && s.month === prevMonth)
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
+    const mapped = prevShifts.map(s => {
+      // Adjust day if it exceeds days in current month
+      const day = s.day > daysInMonth ? daysInMonth : s.day
+      return {
+        id: `copy-${s.id}-${Date.now()}`,
+        staffId: profilesList.find(p => p.full_name === s.name)?.id || '',
+        name: s.name,
+        day: day,
+        start: s.start,
+        end: s.end,
+        role: s.role || 'staff'
+      }
+    })
+    setBuilderShifts(prev => [...prev, ...mapped])
+    alert(`Added ${mapped.length} shifts from ${months[prevMonth]} ${prevYear}.`)
+  }
+
+  const updatePatternShift = (field, value) => {
+    setPatternShift(prev => ({ ...prev, [field]: value }))
+  }
+
+  const addPatternShifts = () => {
+    const { staffId, role, start, end, days } = patternShift
+    if (!staffId) {
+      alert('Please select a staff member.')
+      return
+    }
+    const staffProfile = profilesList.find(p => p.id === staffId)
+    if (!staffProfile) return
+
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
+    const newShifts = []
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(currentYear, currentMonth, day)
+      const weekday = date.getDay() // 0=Sunday, 1=Monday, ...
+      if (days.includes(weekday)) {
+        newShifts.push({
+          id: `pattern-${Date.now()}-${day}`,
+          staffId,
+          name: staffProfile.full_name,
+          day,
+          start,
+          end,
+          role
+        })
+      }
+    }
+    setBuilderShifts(prev => [...prev, ...newShifts])
+    setShowPatternModal(false)
+    alert(`Added ${newShifts.length} shifts for ${staffProfile.full_name}.`)
   }
 
   const generateSchedule = async () => {
@@ -1039,6 +1104,9 @@ export default function Schedule() {
             <div className="flex flex-wrap gap-2 mb-6">
               <button onClick={loadExistingShifts} className="btn-secondary text-sm">📥 Load Existing Shifts</button>
               <button onClick={addEmptyShift} className="btn-primary text-sm">➕ Add Shift</button>
+              <button onClick={() => setShowPatternModal(true)} className="btn-secondary text-sm">📅 Add Pattern</button>
+              <button onClick={copyLastMonth} className="btn-secondary text-sm">📋 Copy Last Month</button>
+              <button onClick={() => setBuilderShifts([])} className="btn-secondary text-sm text-red-400">🗑️ Clear All</button>
             </div>
             
             <div className="space-y-4 mb-6">
@@ -1132,6 +1200,106 @@ export default function Schedule() {
             <div className="flex gap-2 mt-6">
               <button onClick={() => setShowScheduleBuilder(false)} className="btn-secondary flex-1">Cancel</button>
               <button onClick={generateSchedule} className="btn-primary flex-1">Generate Schedule</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPatternModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 z-50">
+          <div className="bg-bar-card p-4 md:p-6 rounded-t-2xl md:rounded-xl w-full max-w-full md:max-w-md mx-auto md:mx-0 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4">📅 Add Pattern Shifts</h2>
+            <p className="text-gray-400 mb-4">Add shifts for a staff member across selected weekdays for the entire month.</p>
+            
+            <div className="space-y-4">
+              {/* Staff */}
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Staff</label>
+                <select 
+                  className="input w-full" 
+                  value={patternShift.staffId}
+                  onChange={e => updatePatternShift('staffId', e.target.value)}
+                >
+                  <option value="">Select staff...</option>
+                  {profilesList.map(p => (
+                    <option key={p.id} value={p.id}>{p.full_name} ({p.role})</option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Role */}
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Role</label>
+                <select 
+                  className="input w-full" 
+                  value={patternShift.role}
+                  onChange={e => updatePatternShift('role', e.target.value)}
+                >
+                  <option value="staff">Staff</option>
+                  <option value="bartender">Bartender</option>
+                  <option value="server">Server</option>
+                  <option value="cook">Cook</option>
+                  <option value="manager">Manager</option>
+                </select>
+              </div>
+              
+              {/* Start & End Time */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Start</label>
+                  <input 
+                    type="time" 
+                    className="input w-full" 
+                    value={patternShift.start}
+                    onChange={e => updatePatternShift('start', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">End</label>
+                  <input 
+                    type="time" 
+                    className="input w-full" 
+                    value={patternShift.end}
+                    onChange={e => updatePatternShift('end', e.target.value)}
+                  />
+                </div>
+              </div>
+              
+              {/* Weekday Checkboxes */}
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Repeat on weekdays</label>
+                <div className="flex flex-wrap gap-3">
+                  {[
+                    { value: 1, label: 'Monday' },
+                    { value: 2, label: 'Tuesday' },
+                    { value: 3, label: 'Wednesday' },
+                    { value: 4, label: 'Thursday' },
+                    { value: 5, label: 'Friday' },
+                    { value: 6, label: 'Saturday' },
+                    { value: 0, label: 'Sunday' }
+                  ].map(({ value, label }) => (
+                    <label key={value} className="flex items-center gap-2">
+                      <input 
+                        type="checkbox" 
+                        checked={patternShift.days.includes(value)}
+                        onChange={(e) => {
+                          const newDays = e.target.checked
+                            ? [...patternShift.days, value]
+                            : patternShift.days.filter(d => d !== value)
+                          updatePatternShift('days', newDays)
+                        }}
+                        className="rounded"
+                      />
+                      <span className="text-sm">{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex gap-2 mt-6">
+              <button onClick={() => setShowPatternModal(false)} className="btn-secondary flex-1">Cancel</button>
+              <button onClick={addPatternShifts} className="btn-primary flex-1">Add Pattern Shifts</button>
             </div>
           </div>
         </div>
