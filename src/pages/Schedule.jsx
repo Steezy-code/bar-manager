@@ -15,6 +15,22 @@ const formatTime12 = (time24) => {
   return `${hour12}:${minutes} ${ampm}`
 }
 
+const timeToMinutes = (time24) => {
+  if (!time24 || !time24.includes(':')) return null
+  const [hours, minutes] = time24.split(':').map(Number)
+  return hours * 60 + minutes
+}
+
+const shiftsOverlap = (aStart, aEnd, bStart, bEnd) => {
+  const startA = timeToMinutes(aStart)
+  const endA = timeToMinutes(aEnd)
+  const startB = timeToMinutes(bStart)
+  const endB = timeToMinutes(bEnd)
+
+  if ([startA, endA, startB, endB].some(value => value === null)) return false
+  return startA < endB && startB < endA
+}
+
 // Get role color (default if role missing)
 const getRoleColor = (role) => {
   switch (role?.toLowerCase()) {
@@ -229,6 +245,26 @@ export default function Schedule() {
       return
     }
 
+    const builderConflicts = []
+    for (let i = 0; i < shiftsToInsert.length; i++) {
+      for (let j = i + 1; j < shiftsToInsert.length; j++) {
+        const left = shiftsToInsert[i]
+        const right = shiftsToInsert[j]
+        if (
+          left.staff_name === right.staff_name &&
+          left.date === right.date &&
+          shiftsOverlap(left.start_time, left.end_time, right.start_time, right.end_time)
+        ) {
+          builderConflicts.push(`${left.staff_name} on ${left.date} (${left.start_time}-${left.end_time} overlaps ${right.start_time}-${right.end_time})`)
+        }
+      }
+    }
+
+    if (builderConflicts.length > 0) {
+      alert(`Schedule conflicts found:\n\n${builderConflicts.slice(0, 5).join('\n')}${builderConflicts.length > 5 ? '\n...' : ''}`)
+      return
+    }
+
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
     const startDate = formatDateForSupabase(currentYear, currentMonth, 1)
     const endDate = formatDateForSupabase(currentYear, currentMonth, daysInMonth)
@@ -264,6 +300,19 @@ export default function Schedule() {
     e.preventDefault()
     if (!user) {
       alert('You must be logged in to add a shift.')
+      return
+    }
+
+    const hasConflict = shifts.some(existing =>
+      existing.name === newShift.name &&
+      existing.year === currentYear &&
+      existing.month === currentMonth &&
+      existing.day === Number(newShift.day) &&
+      shiftsOverlap(existing.start, existing.end, newShift.start, newShift.end)
+    )
+
+    if (hasConflict) {
+      alert('This staff member already has an overlapping shift on that day.')
       return
     }
 
@@ -738,32 +787,43 @@ export default function Schedule() {
                           </div>
                         ) : (
                           <div className="space-y-3">
-                            {dayShifts.map(s => (
-                              <div
-                                key={s.id}
-                                className={`p-3 rounded-lg border-l-4 ${getRoleColor(s.role)} border-opacity-80 bg-bar-blue/10`}
-                              >
-                                <div className="flex justify-between items-center">
-                                  <div className="font-semibold">{s.name}</div>
-                                  {hasRole('manager') && (
-                                    <button
-                                      onClick={() => deleteShift(s.id)}
-                                      className="text-red-500 hover:bg-red-500/20 p-1 rounded"
-                                    >
-                                      <TrashIcon className="w-4 h-4" />
-                                    </button>
+                            {dayShifts.map(s => {
+                              const hasConflict = dayShifts.some(other =>
+                                other.id !== s.id &&
+                                other.name === s.name &&
+                                shiftsOverlap(s.start, s.end, other.start, other.end)
+                              )
+
+                              return (
+                                <div
+                                  key={s.id}
+                                  className={`p-3 rounded-lg border-l-4 ${hasConflict ? 'border-red-500 bg-red-500/10' : `${getRoleColor(s.role)} border-opacity-80 bg-bar-blue/10`}`}
+                                >
+                                  <div className="flex justify-between items-center">
+                                    <div className="font-semibold">{s.name}</div>
+                                    {hasRole('manager') && (
+                                      <button
+                                        onClick={() => deleteShift(s.id)}
+                                        className="text-red-500 hover:bg-red-500/20 p-1 rounded"
+                                      >
+                                        <TrashIcon className="w-4 h-4" />
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="text-gray-400 text-sm mt-1">
+                                    {formatTime12(s.start)} – {formatTime12(s.end)}
+                                  </div>
+                                  {s.role && (
+                                    <div className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-bar-dark text-gray-300">
+                                      {s.role}
+                                    </div>
+                                  )}
+                                  {hasConflict && (
+                                    <div className="mt-2 text-xs text-red-300">Conflicts with another shift for {s.name}</div>
                                   )}
                                 </div>
-                                <div className="text-gray-400 text-sm mt-1">
-                                  {formatTime12(s.start)} – {formatTime12(s.end)}
-                                </div>
-                                {s.role && (
-                                  <div className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-bar-dark text-gray-300">
-                                    {s.role}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
+                              )
+                            })}
                             {dayTimeOff.map(to => (
                               <div
                                 key={to.id}
@@ -813,32 +873,43 @@ export default function Schedule() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {dayShifts.map(s => (
-                        <div
-                          key={s.id}
-                          className={`p-3 rounded-lg border-l-4 ${getRoleColor(s.role)} border-opacity-80 bg-bar-blue/10`}
-                        >
-                          <div className="flex justify-between items-center">
-                            <div className="font-semibold">{s.name}</div>
-                            {hasRole('manager') && (
-                              <button
-                                onClick={() => deleteShift(s.id)}
-                                className="text-red-500 hover:bg-red-500/20 p-1 rounded"
-                              >
-                                <TrashIcon className="w-4 h-4" />
-                              </button>
+                      {dayShifts.map(s => {
+                        const hasConflict = dayShifts.some(other =>
+                          other.id !== s.id &&
+                          other.name === s.name &&
+                          shiftsOverlap(s.start, s.end, other.start, other.end)
+                        )
+
+                        return (
+                          <div
+                            key={s.id}
+                            className={`p-3 rounded-lg border-l-4 ${hasConflict ? 'border-red-500 bg-red-500/10' : `${getRoleColor(s.role)} border-opacity-80 bg-bar-blue/10`}`}
+                          >
+                            <div className="flex justify-between items-center">
+                              <div className="font-semibold">{s.name}</div>
+                              {hasRole('manager') && (
+                                <button
+                                  onClick={() => deleteShift(s.id)}
+                                  className="text-red-500 hover:bg-red-500/20 p-1 rounded"
+                                >
+                                  <TrashIcon className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                            <div className="text-gray-400 text-sm mt-1">
+                              {formatTime12(s.start)} – {formatTime12(s.end)}
+                            </div>
+                            {s.role && (
+                              <div className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-bar-dark text-gray-300">
+                                {s.role}
+                              </div>
+                            )}
+                            {hasConflict && (
+                              <div className="mt-2 text-xs text-red-300">Conflicts with another shift for {s.name}</div>
                             )}
                           </div>
-                          <div className="text-gray-400 text-sm mt-1">
-                            {formatTime12(s.start)} – {formatTime12(s.end)}
-                          </div>
-                          {s.role && (
-                            <div className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-bar-dark text-gray-300">
-                              {s.role}
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                        )
+                      })}
                       {dayTimeOff.map(to => (
                         <div
                           key={to.id}
