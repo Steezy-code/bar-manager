@@ -816,7 +816,6 @@ export default function Schedule() {
             <>
               <button onClick={() => csvRef.current.click()} className="btn-secondary text-sm">📥 Import</button>
               <button onClick={exportCSV} className="btn-secondary text-sm">📤 Export</button>
-              <button onClick={() => setShowCopyWeek(true)} className="btn-secondary text-sm">📋 Copy Week</button>
               <button onClick={clearAll} className="btn-secondary text-sm text-red-400">🗑️ Clear</button>
               <button onClick={() => setShowScheduleBuilder(true)} className="btn-secondary text-sm">🏗️ Build Month</button>
             </>
