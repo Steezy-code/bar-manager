@@ -450,25 +450,78 @@ export default function Schedule() {
     a.click();
   }
 
-  const handleCopyWeek = () => {
+  const handleCopyWeek = async () => {
     const weekShifts = shifts.filter(s => s.month === currentMonth && s.year === currentYear)
     if (weekShifts.length === 0) {
       alert('No shifts to copy from this month!')
       return
     }
-    
-    // Copy only to the selected month
-    let added = 0
-    weekShifts.forEach(shift => {
-      const newShift = { ...shift, id: Date.now() + Math.random(), month: parseInt(copyToMonth) }
-      // Note: This will add to local state only, not to Supabase
-      // For phase 1, we'll keep copy week as local-only to keep it simple
-      setShifts(prev => [...prev, newShift])
-      added++
-    })
-    
-    setShowCopyWeek(false)
-    alert(`Copied ${added} shifts to ${months[copyToMonth]} (local only).`)
+
+    const targetMonth = parseInt(copyToMonth)
+    const targetYear = currentYear
+    const targetDaysInMonth = new Date(targetYear, targetMonth + 1, 0).getDate()
+
+    // Build shifts to insert
+    const shiftsToInsert = []
+    for (const shift of weekShifts) {
+      if (shift.day > targetDaysInMonth) {
+        // Skip shifts that would land on a nonexistent day in target month
+        continue
+      }
+      shiftsToInsert.push({
+        staff_name: shift.name,
+        date: formatDateForSupabase(targetYear, targetMonth, shift.day),
+        start_time: shift.start,
+        end_time: shift.end,
+        role: shift.role || 'staff',
+        user_id: user?.id
+      })
+    }
+
+    if (shiftsToInsert.length === 0) {
+      alert('No valid shifts to copy (or all days exceed target month length).')
+      return
+    }
+
+    // Conflict detection with existing shifts in target month
+    const existingShiftsInTarget = shifts.filter(s => s.month === targetMonth && s.year === targetYear)
+    const conflicts = []
+    for (const newShift of shiftsToInsert) {
+      const { date, start_time, end_time, staff_name } = newShift
+      const { year, month, day } = parseSupabaseDate(date)
+      const hasConflict = existingShiftsInTarget.some(existing =>
+        existing.name === staff_name &&
+        existing.year === year &&
+        existing.month === month &&
+        existing.day === day &&
+        shiftsOverlap(existing.start, existing.end, start_time, end_time)
+      )
+      if (hasConflict) {
+        conflicts.push(`${staff_name} on ${date} (${start_time}-${end_time})`)
+      }
+    }
+
+    if (conflicts.length > 0) {
+      alert(`Copy conflicts found:\n\n${conflicts.slice(0,5).join('\n')}${conflicts.length > 5 ? '\n...' : ''}`)
+      return
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.SHIFTS)
+        .insert(shiftsToInsert)
+        .select('*')
+
+      if (error) throw error
+
+      // Refresh shifts from Supabase
+      await fetchShifts()
+      setShowCopyWeek(false)
+      alert(`Copied ${shiftsToInsert.length} shifts to ${months[targetMonth]} (saved to database).`)
+    } catch (err) {
+      console.error('Error copying shifts:', err)
+      alert('Failed to copy shifts to database.')
+    }
   }
 
   const importCSV = async (e) => {
