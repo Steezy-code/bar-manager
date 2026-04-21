@@ -140,7 +140,11 @@ export default function Admin() {
       .eq('id', userId);
     if (error) {
       console.error('Failed to remove user:', error);
-      alert('Failed to remove user: ' + error.message);
+      if (error.code === '23514') {
+        alert(`Cannot set status to 'removed': the database constraint needs updating.\n\nPlease run the migration:\n\n20260421040000_add_removed_status.sql\n\nin Supabase SQL Editor to allow the 'removed' status.`);
+      } else {
+        alert('Failed to remove user: ' + error.message);
+      }
     } else {
       setUsers(users.map(u => u.id === userId ? { ...u, status: 'removed' } : u));
       alert(`User "${userName}" removed.`);
