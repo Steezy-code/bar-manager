@@ -2,6 +2,8 @@
 
 A free, full‑featured restaurant management system built with React, Supabase, and deployable on Netlify.
 
+> 📘 **User guide:** For a friendly, step‑by‑step guide tailored to bar managers and staff, see [BARMANAGER_USER_GUIDE.md](BARMANAGER_USER_GUIDE.md).
+
 ## 🚀 Features
 
 ### Core Modules
