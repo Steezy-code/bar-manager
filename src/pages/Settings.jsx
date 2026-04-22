@@ -151,17 +151,6 @@ export default function Settings() {
           <p className="text-green-400">{msg}</p>
         </div>
       )}
-
-      <div className="card">
-        <h2 className="text-lg font-bold mb-4">ℹ️ Sharing Workflow</h2>
-        <ol className="text-gray-400 text-sm space-y-2">
-          <li>1. Manager fills out all sections (inventory, schedule, time off, checklists)</li>
-          <li>2. Click "Export Full Data" → downloads JSON</li>
-          <li>3. Send the JSON file to staff</li>
-          <li>4. Staff opens app → Settings → Import Data</li>
-          <li>5. Everyone has identical, synced data!</li>
-        </ol>
-      </div>
     </div>
   )
 }
