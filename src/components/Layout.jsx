@@ -26,7 +26,15 @@ export default function Layout({ user, onLogout }) {
     navigate('/login')
   }
 
-  const allNavItems = [...navItems]
+  // Filter nav items based on role
+  const filteredNavItems = navItems.filter(item => {
+    if (item.path === '/settings') {
+      return hasRole('manager') // manager or admin
+    }
+    return true
+  })
+
+  const allNavItems = [...filteredNavItems]
   if (isApproved && hasRole('admin')) {
     allNavItems.push({ name: 'Admin', path: '/admin', icon: ShieldCheckIcon })
   }
