@@ -10,6 +10,37 @@ A free, full-featured restaurant management system built with React, Supabase, a
 - 🏝️ **Time Off Requests** - Staff request time off, managers approve/deny
 - 👥 **Team Management** - Role-based access (manager/staff)
 
+## 🆕 What’s New (Branch `feature/rbac‑login‑vibes`)
+
+This branch introduces **Role‑Based Access Control (RBAC)** and **full Supabase integration**, transforming the app from a local‑storage prototype into a production‑ready multi‑user system.
+
+### 🔐 RBAC & Authentication
+- **Four roles:** Admin, Manager, Staff, Viewer – with hierarchical permissions.
+- **Protected routes:** Each page requires a minimum role (e.g., only admins can access the Admin panel).
+- **Admin panel:** List all users, edit roles/status inline, approve pending sign‑ups.
+- **Pending approval flow:** New users are placed in “pending” status until an admin approves them.
+- **Login/Sign‑up** with Supabase Auth; profiles automatically created via database trigger.
+
+### 🗃️ Supabase Data Layer (No More LocalStorage)
+- **Schedule:** Shifts stored in `shifts` table with `staff_name` mapping.
+- **Inventory:** Items stored in `inventory_items` table; low‑stock alerts read from Supabase.
+- **Checklists:** Per‑user checklist data stored in `checklists.tasks` (JSONB).
+- **Time Off:** Requests stored in `time_off_requests` with pending/approved status.
+- **Dashboard:** Low‑stock alerts pulled live from Supabase.
+- **Settings:** Export/import now works with Supabase tables (full‑database backup/restore).
+
+### 🛡️ Security & Configuration
+- **Environment variables** for Supabase URL & anon key (no secrets in the repo).
+- **Netlify secret‑scanning** configured to ignore public placeholders.
+- **SQL migration scripts** included for seamless schema upgrades.
+- **Row‑Level Security (RLS)** policies allow authenticated users access to their own data.
+
+### 📋 Updated Testing Guide
+- Comprehensive `TESTING.md` with step‑by‑step verification for each new feature.
+- Covers RBAC flows, data persistence, admin actions, and cross‑module integration.
+
+---
+
 ## Tech Stack (100% Free)
 
 - **Frontend:** React + Vite + Tailwind CSS
@@ -112,6 +143,9 @@ create trigger on_auth_user_created
   for each row execute procedure public.handle_new_user();
 ```
 
+### 2.1 Apply Additional Migrations (for RBAC/Supabase features)
+If you’re deploying the `feature/rbac‑login‑vibes` branch, run the migration scripts in the `migrations/` folder (in order) to add required columns and adjust constraints.
+
 ### 3. Configure the App
 ```bash
 # Copy .env.example to .env and fill in your values
@@ -137,21 +171,41 @@ npm run dev
 ```
 src/
 ├── components/
-│   └── Layout.jsx       # Main layout with sidebar
+│   └── Layout.jsx               # Main layout with conditional Admin link
 ├── lib/
-│   └── supabase.js      # Supabase client
+│   └── supabase.js              # Supabase client + table name constants
+├── context/
+│   └── AuthContext.jsx          # Auth state, profile, role exposure
+├── hooks/
+│   └── usePermissions.js        # RBAC logic (hasRole, hasAnyRole, etc.)
 ├── pages/
-│   ├── Login.jsx        # Auth page
-│   ├── Dashboard.jsx    # Home dashboard
-│   ├── Inventory.jsx    # Inventory management
-│   ├── Schedule.jsx     # Shift scheduling
-│   ├── Checklists.jsx   # Daily checklists
-│   ├── TimeOff.jsx      # Time off requests
-│   └── Settings.jsx     # Team management
-├── App.jsx              # Main app with routing
-├── index.css            # Global styles
-└── main.jsx             # Entry point
+│   ├── Login.jsx                # Sign‑in form
+│   ├── SignUp.jsx               # Sign‑up / request‑access form
+│   ├── PendingApproval.jsx      # Waiting screen for unapproved users
+│   ├── Admin.jsx                # Admin panel – user list, role/status editing
+│   ├── Dashboard.jsx            # Home dashboard with low‑stock alerts
+│   ├── Inventory.jsx            # Inventory management (Supabase‑backed)
+│   ├── Schedule.jsx             # Shift scheduling (Supabase‑backed)
+│   ├── Checklists.jsx           # Daily checklists (Supabase‑backed)
+│   ├── TimeOff.jsx              # Time‑off requests (Supabase‑backed)
+│   └── Settings.jsx             # Export/import for Supabase tables
+├── App.jsx                      # Router with ProtectedRoute & requiredRole guards
+├── index.css                    # Global styles
+└── main.jsx                     # Entry point
 ```
+
+### 📦 Migrations
+
+```
+migrations/
+├── 2026‑04‑07‑add‑staff_name‑to‑shifts.sql
+├── 2026‑04‑07‑update‑tables‑for‑supabase‑migration.sql
+├── 2026‑04‑08‑fix‑checklists‑table.sql
+├── 2026‑04‑08‑fix‑checklists‑constraints.sql
+└── 2026‑04‑08‑drop‑not‑null‑checklists.sql
+```
+
+Each migration is safe to run multiple times and ensures the database schema matches the frontend.
 
 ## License
 

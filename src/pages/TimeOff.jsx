@@ -1,69 +1,190 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { TrashIcon, PlusIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
-
-const STORAGE_KEY = 'barmanager_timeoff'
-const PENDING_KEY = 'barmanager_timeoff_pending'
+import { supabase } from '../lib/supabase'
+import { TABLES } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
+import { usePermissions } from '../hooks/usePermissions'
 
 export default function TimeOff() {
+  const { user } = useAuth()
+  const { hasRole, isApproved } = usePermissions()
+  const canManageRequests = hasRole('manager')
   const [approved, setApproved] = useState([])
   const [pending, setPending] = useState([])
   const [showAdd, setShowAdd] = useState(false)
-  const [newTimeOff, setNewTimeOff] = useState({ name: '', dates: '', days: '' })
+  const [newTimeOff, setNewTimeOff] = useState(() => ({ name: '', dates: '', days: '', month: new Date().getMonth(), year: new Date().getFullYear() }))
+  const [loading, setLoading] = useState(true)
+  const [monthIsOneIndexed, setMonthIsOneIndexed] = useState(false)
 
-  useEffect(() => {
-    const savedApproved = localStorage.getItem(STORAGE_KEY)
-    if (savedApproved) setApproved(JSON.parse(savedApproved))
-    
-    const savedPending = localStorage.getItem(PENDING_KEY)
-    if (savedPending) setPending(JSON.parse(savedPending))
+  // Fetch time off requests from Supabase
+  const fetchTimeOff = useCallback(async () => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.TIME_OFF)
+        .select('*')
+        .order('created_at', { ascending: false })
+      
+      if (error) throw error
+
+      // Detect month indexing: if any month > 11, assume 1‑indexed (calendar months)
+      const hasOneIndexed = data && data.some(r => r.month > 11);
+      setMonthIsOneIndexed(hasOneIndexed);
+      if (hasOneIndexed) {
+        console.warn('Detected 1‑indexed months in time‑off requests; apply migration 20260408040000_fix_time_off_month_index.sql.');
+      }
+
+      const pendingData = data.filter(r => r.status === 'pending')
+      const approvedData = data.filter(r => r.status === 'approved')
+      setPending(pendingData)
+      setApproved(approvedData)
+    } catch (err) {
+      console.error('Error fetching time off requests:', err)
+      alert('Failed to load time off requests from database.')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  const saveApproved = (newData) => {
-    setApproved(newData)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newData))
-  }
+  useEffect(() => {
+    fetchTimeOff()
+  }, [fetchTimeOff])
 
-  const savePending = (newData) => {
-    setPending(newData)
-    localStorage.setItem(PENDING_KEY, JSON.stringify(newData))
-  }
-
-  const addPending = (e) => {
+  // Add new pending request
+  const addPending = async (e) => {
     e.preventDefault()
-    const currentMonth = new Date().getMonth()
-    const currentYear = new Date().getFullYear()
-    const to = { ...newTimeOff, id: Date.now(), status: 'pending', month: currentMonth, year: currentYear }
-    savePending([...pending, to])
-    setShowAdd(false)
-    setNewTimeOff({ name: '', dates: '', days: '' })
-  }
+    if (!user) {
+      alert('You must be logged in to add a request.')
+      return
+    }
 
-  const approveRequest = (request) => {
-    const currentMonth = new Date().getMonth()
-    const currentYear = new Date().getFullYear()
-    const approvedItem = { ...request, status: 'approved', month: currentMonth, year: currentYear }
-    saveApproved([...approved, approvedItem])
-    savePending(pending.filter(p => p.id !== request.id))
-  }
+    const monthToStore = monthIsOneIndexed ? newTimeOff.month + 1 : newTimeOff.month;
+    const requestToInsert = {
+      name: newTimeOff.name,
+      dates: newTimeOff.dates,
+      days: newTimeOff.days,
+      status: 'pending',
+      month: monthToStore,
+      year: newTimeOff.year,
+      user_id: user.id
+    }
 
-  const denyRequest = (id) => {
-    if (confirm('Deny this time off request?')) {
-      savePending(pending.filter(p => p.id !== id))
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.TIME_OFF)
+        .insert([requestToInsert])
+        .select('*')
+      if (error) throw error
+
+      const inserted = data[0]
+      setPending([...pending, inserted])
+      setShowAdd(false)
+      setNewTimeOff({ name: '', dates: '', days: '' })
+    } catch (err) {
+      console.error('Error adding time off request:', err)
+      alert('Failed to add request to database.')
     }
   }
 
-  const removeApproved = (id) => saveApproved(approved.filter(t => t.id !== id))
+  // Approve request
+  const approveRequest = async (request) => {
+    if (!canManageRequests) {
+      alert('Only managers can approve time off requests.')
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from(TABLES.TIME_OFF)
+        .update({ status: 'approved' })
+        .eq('id', request.id)
+      if (error) throw error
+
+      // Move from pending to approved in state
+      setPending(pending.filter(p => p.id !== request.id))
+      setApproved([...approved, { ...request, status: 'approved' }])
+    } catch (err) {
+      console.error('Error approving request:', err)
+      alert('Failed to approve request in database.')
+    }
+  }
+
+  // Deny request (delete)
+  const denyRequest = async (id) => {
+    if (!canManageRequests) {
+      alert('Only managers can deny time off requests.')
+      return
+    }
+
+    if (!confirm('Deny this time off request?')) return
+
+    try {
+      const { error } = await supabase
+        .from(TABLES.TIME_OFF)
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+
+      setPending(pending.filter(p => p.id !== id))
+    } catch (err) {
+      console.error('Error denying request:', err)
+      alert('Failed to deny request in database.')
+    }
+  }
+
+  // Remove approved request (delete)
+  const removeApproved = async (id) => {
+    if (!canManageRequests) {
+      alert('Only managers can remove approved time off.')
+      return
+    }
+
+    if (!confirm('Remove this approved time off?')) return
+
+    try {
+      const { error } = await supabase
+        .from(TABLES.TIME_OFF)
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+
+      setApproved(approved.filter(t => t.id !== id))
+    } catch (err) {
+      console.error('Error removing approved request:', err)
+      alert('Failed to remove request from database.')
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6 pb-24 lg:pb-0">
+        <div className="flex justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Time Off</h1>
+            <p className="text-gray-400 text-sm">Loading...</p>
+          </div>
+        </div>
+        <div className="card">
+          <div className="text-gray-400">Loading time off requests...</div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 pb-24 lg:pb-0">
       <div className="flex justify-between">
         <div>
           <h1 className="text-2xl font-bold">Time Off</h1>
-          <p className="text-gray-400 text-sm">Review requests → Approve to add to schedule</p>
+          <p className="text-gray-400 text-sm">
+            {canManageRequests ? 'Review requests → Approve to add to schedule' : 'Submit requests and view approved time off'}
+          </p>
         </div>
-        <button onClick={() => setShowAdd(true)} className="btn-primary">
-          <PlusIcon className="w-4 h-4" /> Add Request
-        </button>
+        {isApproved && (
+          <button onClick={() => setShowAdd(true)} className="btn-primary">
+            <PlusIcon className="w-4 h-4" /> Add Request
+          </button>
+        )}
       </div>
 
       {pending.length > 0 && (
@@ -76,14 +197,18 @@ export default function TimeOff() {
                   <div className="font-semibold">{t.name}</div>
                   <div className="text-sm text-gray-400">{t.dates} (Days: {t.days})</div>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => approveRequest(t)} className="p-2 bg-green-600 rounded text-white hover:bg-green-500">
-                    <CheckIcon className="w-5 h-5" /> Approve
-                  </button>
-                  <button onClick={() => denyRequest(t.id)} className="p-2 bg-red-600 rounded text-white hover:bg-red-500">
-                    <XMarkIcon className="w-5 h-5" /> Deny
-                  </button>
-                </div>
+                {canManageRequests ? (
+                  <div className="flex gap-2">
+                    <button onClick={() => approveRequest(t)} className="p-2 bg-green-600 rounded text-white hover:bg-green-500">
+                      <CheckIcon className="w-5 h-5" /> Approve
+                    </button>
+                    <button onClick={() => denyRequest(t.id)} className="p-2 bg-red-600 rounded text-white hover:bg-red-500">
+                      <XMarkIcon className="w-5 h-5" /> Deny
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-xs text-gray-400">Manager approval required</span>
+                )}
               </div>
             ))}
           </div>
@@ -102,9 +227,11 @@ export default function TimeOff() {
                   <div className="font-semibold">{t.name}</div>
                   <div className="text-sm text-gray-400">{t.dates} (Days: {t.days})</div>
                 </div>
-                <button onClick={() => removeApproved(t.id)} className="p-2 text-red-500">
-                  <TrashIcon className="w-5 h-5" />
-                </button>
+                {canManageRequests ? (
+                  <button onClick={() => removeApproved(t.id)} className="p-2 text-red-500">
+                    <TrashIcon className="w-5 h-5" />
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>
@@ -118,6 +245,26 @@ export default function TimeOff() {
             <input placeholder="Staff name" className="input" value={newTimeOff.name} onChange={e => setNewTimeOff({...newTimeOff, name: e.target.value})} required />
             <input placeholder="Dates (e.g., March 15-17)" className="input" value={newTimeOff.dates} onChange={e => setNewTimeOff({...newTimeOff, dates: e.target.value})} required />
             <input placeholder="Day numbers (e.g., 15,16,17)" className="input" value={newTimeOff.days} onChange={e => setNewTimeOff({...newTimeOff, days: e.target.value})} required />
+            <div className="flex gap-2">
+              <select className="input flex-1" value={newTimeOff.month + 1} onChange={e => setNewTimeOff({...newTimeOff, month: parseInt(e.target.value) - 1})}>
+                <option value="1">January</option>
+                <option value="2">February</option>
+                <option value="3">March</option>
+                <option value="4">April</option>
+                <option value="5">May</option>
+                <option value="6">June</option>
+                <option value="7">July</option>
+                <option value="8">August</option>
+                <option value="9">September</option>
+                <option value="10">October</option>
+                <option value="11">November</option>
+                <option value="12">December</option>
+              </select>
+              <select className="input flex-1" value={newTimeOff.year} onChange={e => setNewTimeOff({...newTimeOff, year: parseInt(e.target.value)})}>
+                <option value={new Date().getFullYear()}>{new Date().getFullYear()}</option>
+                <option value={new Date().getFullYear() + 1}>{new Date().getFullYear() + 1}</option>
+              </select>
+            </div>
             <p className="text-gray-400 text-xs">Request goes to queue. Click Approve to add to schedule.</p>
             <div className="flex gap-2">
               <button type="button" onClick={() => setShowAdd(false)} className="btn-secondary flex-1">Cancel</button>
