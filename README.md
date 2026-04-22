@@ -1,43 +1,62 @@
 # BarManager - Restaurant Management App
 
-A free, full-featured restaurant management system built with React, Supabase, and deployable on Netlify.
+A free, full‑featured restaurant management system built with React, Supabase, and deployable on Netlify.
 
-## Features
+## 🚀 Features
 
-- 📦 **Inventory Tracking** - Track stock levels, get low-stock alerts
-- 📅 **Shift Scheduling** - Weekly schedule management
-- ✅ **Checklists** - Opening/closing checklists for staff
-- 🏝️ **Time Off Requests** - Staff request time off, managers approve/deny
-- 👥 **Team Management** - Role-based access (manager/staff)
+### Core Modules
+- 📦 **Inventory Tracking** – Track stock levels, low‑stock alerts, add/edit/remove items, export/import JSON.
+- 📅 **Shift Scheduling** – Monthly calendar view, add/delete shifts, conflict detection, mobile‑optimized UI.
+- ✅ **Daily Checklists** – Opening/closing checklists, per‑user completion tracking.
+- 🏝️ **Time Off Requests** – Staff request time off, managers approve/deny, approved days appear on schedule.
+- 👥 **Team Management** – Role‑based access (Admin, Manager, Staff, Viewer) with hierarchical permissions.
 
-## 🆕 What’s New (Branch `feature/rbac‑login‑vibes`)
+### 🔐 RBAC & Security
+- **Four roles** with hierarchical permissions (Admin > Manager > Staff > Viewer).
+- **Protected routes** – each page requires a minimum role.
+- **Pending approval flow** – new users require admin approval before accessing the app.
+- **Supabase Auth** – email/password login, automatic profile creation via database trigger.
+- **Row‑Level Security (RLS)** – policies restrict data access to authenticated users.
 
-This branch introduces **Role‑Based Access Control (RBAC)** and **full Supabase integration**, transforming the app from a local‑storage prototype into a production‑ready multi‑user system.
+### 📅 Schedule Management
+- **Conflict detection** – prevents overlapping shifts for the same staff member.
+- **Mobile usability** – touch‑friendly controls, responsive calendar grid.
+- **Build Month** – pattern‑based shift generation, copy shifts from previous month, clear all shifts/time‑off.
+- **Copy week** – copy a week’s shifts to another month with conflict detection (UI hidden in current release).
+- **Export/Import** – CSV export for shifts, JSON backup/restore for inventory.
 
-### 🔐 RBAC & Authentication
-- **Four roles:** Admin, Manager, Staff, Viewer – with hierarchical permissions.
-- **Protected routes:** Each page requires a minimum role (e.g., only admins can access the Admin panel).
-- **Admin panel:** List all users, edit roles/status inline, approve pending sign‑ups.
-- **Pending approval flow:** New users are placed in “pending” status until an admin approves them.
-- **Login/Sign‑up** with Supabase Auth; profiles automatically created via database trigger.
+### 🛠️ Admin Panel
+- **User management** – list all users, edit roles/status inline, approve pending sign‑ups.
+- **Transfer admin role** – safely transfer admin privileges to another user.
+- **Soft‑delete users** – mark users as “removed” (hidden by default, can be restored).
+- **Show removed toggle** – toggle visibility of removed users.
+- **Improved error handling** – clear messages when database constraints require migrations.
 
-### 🗃️ Supabase Data Layer (No More LocalStorage)
-- **Schedule:** Shifts stored in `shifts` table with `staff_name` mapping.
-- **Inventory:** Items stored in `inventory_items` table; low‑stock alerts read from Supabase.
-- **Checklists:** Per‑user checklist data stored in `checklists.tasks` (JSONB).
-- **Time Off:** Requests stored in `time_off_requests` with pending/approved status.
-- **Dashboard:** Low‑stock alerts pulled live from Supabase.
-- **Settings:** Export/import now works with Supabase tables (full‑database backup/restore).
+### 🗃️ Data Management
+- **Supabase‑backed** – all data stored in Supabase tables, no local‑storage fallback.
+- **Migration‑ready** – SQL migration scripts for schema upgrades (run in order).
+- **Export/Import** – full‑database backup and restore via JSON.
+- **Environment variables** – Supabase URL and anon key configured via `.env`.
 
-### 🛡️ Security & Configuration
-- **Environment variables** for Supabase URL & anon key (no secrets in the repo).
-- **Netlify secret‑scanning** configured to ignore public placeholders.
-- **SQL migration scripts** included for seamless schema upgrades.
-- **Row‑Level Security (RLS)** policies allow authenticated users access to their own data.
+### 📱 Mobile Usability
+- **Responsive design** – works on phones, tablets, and desktops.
+- **Touch‑friendly** – larger tap targets, swipe‑friendly calendar navigation.
+- **Optimized layouts** – stacked cards on mobile, grid on larger screens.
 
-### 📋 Updated Testing Guide
-- Comprehensive `TESTING.md` with step‑by‑step verification for each new feature.
-- Covers RBAC flows, data persistence, admin actions, and cross‑module integration.
+## 📌 Recent Updates (2026‑04‑21)
+
+The `feature/rbac‑login‑vibes` branch has been merged into `main`. All RBAC and Supabase features are now live, plus the following enhancements:
+
+- **Conflict detection** – added to schedule builder and copy‑week operations.
+- **Mobile usability improvements** – better touch targets, responsive calendar.
+- **Copy week persistence** – copy‑week shifts are now saved to Supabase with conflict detection.
+- **Schedule builder enhancements** – pattern shifts, copy last month, clear all, improved UX.
+- **Admin panel upgrades** – transfer admin role, soft‑delete users, show‑removed toggle.
+- **Migration added** – `20260421040000_add_removed_status.sql` allows 'removed' status in profiles table.
+- **Admin error handling** – clearer error messages when constraints block updates.
+- **UI tweaks** – “Copy Week” button hidden (functionality remains).
+
+All changes are deployed and ready for use.
 
 ---
 
@@ -143,8 +162,13 @@ create trigger on_auth_user_created
   for each row execute procedure public.handle_new_user();
 ```
 
-### 2.1 Apply Additional Migrations (for RBAC/Supabase features)
-If you’re deploying the `feature/rbac‑login‑vibes` branch, run the migration scripts in the `migrations/` folder (in order) to add required columns and adjust constraints.
+### 2.1 Apply RBAC and Feature Migrations
+The app uses two sets of migration scripts:
+
+- **Initial Supabase schema** (`migrations/` folder) – adds required columns and constraints for the core tables.
+- **RBAC and feature enhancements** (`supabase/migrations/` folder) – adds role‑based access control, status columns, announcements, and other enhancements.
+
+For a fresh deployment, run **all** migrations in chronological order (across both directories) after creating the initial schema via the SQL script above. Each migration is idempotent and safe to run multiple times.
 
 ### 3. Configure the App
 ```bash
@@ -196,6 +220,8 @@ src/
 
 ### 📦 Migrations
 
+The app uses two migration directories. Run all scripts in chronological order (by filename) after creating the initial schema.
+
 ```
 migrations/
 ├── 2026‑04‑07‑add‑staff_name‑to‑shifts.sql
@@ -203,9 +229,23 @@ migrations/
 ├── 2026‑04‑08‑fix‑checklists‑table.sql
 ├── 2026‑04‑08‑fix‑checklists‑constraints.sql
 └── 2026‑04‑08‑drop‑not‑null‑checklists.sql
+supabase/migrations/
+├── 20260404060700_add_rbac.sql
+├── 20260404060701_profile_trigger.sql
+├── 20260404060702_update_profile_trigger.sql
+├── 20260408030000_fix_profiles_constraints.sql
+├── 20260408030100_fix_admin_policy.sql
+├── 20260408033000_fix_time_off_schema.sql
+├── 20260408040000_fix_time_off_month_index.sql
+├── 20260408122000_add_rls_shifts.sql
+├── 20260408122100_add_rls_inventory.sql
+├── 20260408122200_add_rls_checklists.sql
+├── 20260409230000_add_team_checklists.sql
+├── 20260411020000_add_announcements.sql
+└── 20260421040000_add_removed_status.sql
 ```
 
-Each migration is safe to run multiple times and ensures the database schema matches the frontend.
+Each migration is idempotent and safe to run multiple times. They ensure the database schema matches the frontend.
 
 ## License
 

@@ -1,6 +1,6 @@
-# TESTING.md — MVP RBAC Testing Guide
+# TESTING.md — BarManager Feature Testing Guide
 
-This document covers how to set up, test, and verify the Role-Based Access Control (RBAC) system in BarManager on the `feature/rbac-login-vibes` branch.
+This document covers how to set up, test, and verify the Role‑Based Access Control (RBAC) system and recent feature enhancements in BarManager (now merged into `main`).
 
 ---
 
@@ -398,6 +398,78 @@ SELECT id, name, dates, days, status, user_id FROM time_off_requests ORDER BY cr
 
 ---
 
+## Recent Feature Tests (2026‑04‑21)
+
+All RBAC and Supabase features are now merged into `main`. The following enhancements have been added and should be verified.
+
+### Conflict Detection in Schedule Builder & Copy Week
+**Steps:**
+1. Log in as a manager or admin.
+2. Navigate to **Schedule** → click **🏗️ Build Month**.
+3. Create overlapping shifts for the same staff member on the same day.
+4. Click **Generate Schedule**.
+
+**Expected:**
+- Alert appears listing the conflicts; schedule is not generated.
+- Shifts are not saved to Supabase.
+
+**Copy week conflict detection:**
+1. In Schedule page, ensure there are existing shifts in the current month.
+2. Use the hidden copy‑week functionality (requires developer tools) to copy shifts to another month where overlapping shifts exist.
+3. Verify that conflict detection prevents the copy.
+
+### Mobile Usability Improvements
+**Steps:**
+1. Open the app on a mobile device or simulate mobile view in browser dev tools.
+2. Navigate to **Schedule** page.
+3. Add a shift, use the date picker, and test touch interactions.
+
+**Expected:**
+- Tap targets are larger and easier to press.
+- Calendar grid is responsive and scrolls smoothly.
+- All buttons and inputs are usable on touch screens.
+
+### Admin Panel Enhancements
+**Steps:**
+1. Log in as admin.
+2. Navigate to **Admin** page.
+3. Verify the following:
+   - **Transfer Admin Role** button opens a modal to select a target user and optionally demote yourself.
+   - **Show removed users** toggle shows/hides users with status `removed`.
+   - **Remove** button sets a user’s status to `removed` (soft‑delete).
+   - Error messages are clear when a database constraint blocks an update.
+
+**Expected:**
+- Admin transfer works and leaves at least one admin in the system.
+- Removed users are hidden by default, can be shown with the toggle.
+- Soft‑delete does not permanently delete the user (they can be restored by changing status).
+
+### Migration: Allow 'removed' Status
+**Prerequisite:** Run the migration `20260421040000_add_removed_status.sql` in Supabase SQL Editor.
+
+**Steps:**
+1. Attempt to set a user’s status to `removed` via the Admin panel.
+2. Verify the change succeeds without constraint errors.
+
+**Expected:**
+- The `profiles` table now accepts `removed` as a valid status.
+- The constraint `profiles_status_check` includes `'removed'`.
+
+### Schedule Builder Enhancements
+**Steps:**
+1. In Schedule page, open **Build Month** modal.
+2. Test the following features:
+   - **Pattern shifts** – generate shifts based on day‑of‑week patterns.
+   - **Copy last month** – copy shifts from the previous month.
+   - **Clear all** – delete all shifts and approved time‑off for the month.
+
+**Expected:**
+- Pattern generation creates shifts according to selected days.
+- Copy last month copies existing shifts to the current month.
+- Clear all removes all schedule data for the month after confirmation.
+
+---
+
 ## Troubleshooting
 
 | Issue | Likely Cause | Fix |
@@ -440,4 +512,4 @@ SELECT id, name, dates, days, status, user_id FROM time_off_requests ORDER BY cr
 
 ---
 
-_Last updated: 2026-04-07 · Branch: feature/rbac-login-vibes_
+_Last updated: 2026-04-21 · Branch: main (RBAC and all features merged)_
