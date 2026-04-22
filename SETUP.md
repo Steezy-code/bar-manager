@@ -181,7 +181,7 @@ You should see "Database ready!" at the bottom.
 ## Part 4: Test Locally
 
 ```bash
-cd /home/claw/.openclaw/workspace/bar-manager
+cd /root/.openclaw/workspace/bar-manager
 
 # Install (only need to do this once)
 npm install
@@ -222,12 +222,6 @@ npm run build
    - `VITE_SUPABASE_URL` = your Supabase URL
    - `VITE_SUPABASE_ANON_KEY` = your anon key
 5. Deploy!
-
----
-
-## Part 6: Role-Based Access Control (Optional)
-
-BarManager now includes role-based access control. See [RBAC_GUIDE.md](RBAC_GUIDE.md) for setup instructions.
 
 ---
 

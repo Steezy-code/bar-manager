@@ -1,439 +1,19 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { PlusIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
-import { supabase } from '../lib/supabase'
-import { TABLES } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
-import { usePermissions } from '../hooks/usePermissions'
 
-// Format HH:MM to h:mm AM/PM
-const formatTime12 = (time24) => {
-  if (!time24) return ''
-  const [hours, minutes] = time24.split(':')
-  const hour = parseInt(hours, 10)
-  const ampm = hour >= 12 ? 'PM' : 'AM'
-  const hour12 = hour % 12 || 12
-  return `${hour12}:${minutes} ${ampm}`
-}
-
-const timeToMinutes = (time24) => {
-  if (!time24 || !time24.includes(':')) return null
-  const [hours, minutes] = time24.split(':').map(Number)
-  return hours * 60 + minutes
-}
-
-const shiftsOverlap = (aStart, aEnd, bStart, bEnd) => {
-  const startA = timeToMinutes(aStart)
-  const endA = timeToMinutes(aEnd)
-  const startB = timeToMinutes(bStart)
-  const endB = timeToMinutes(bEnd)
-
-  if ([startA, endA, startB, endB].some(value => value === null)) return false
-  return startA < endB && startB < endA
-}
-
-// Get role color (default if role missing)
-const getRoleColor = (role) => {
-  switch (role?.toLowerCase()) {
-    case 'bartender': return 'bg-blue-500'
-    case 'server': return 'bg-green-500'
-    case 'cook': return 'bg-orange-500'
-    case 'manager': return 'bg-purple-500'
-    default: return 'bg-gray-500'
-  }
-}
-
+const STORAGE_KEY = 'barmanager_schedule'
 const TIME_OFF_KEY = 'barmanager_timeoff'
 
-// Helper to convert day/month/year to Supabase date string (YYYY-MM-DD)
-// Helper to convert year, zero‑indexed month (0–11), day (1–31) to Supabase date string (YYYY‑MM‑DD)
-const formatDateForSupabase = (year, monthZeroIndexed, day) => {
-  const month = monthZeroIndexed + 1; // convert to 1‑indexed for date string
-  const monthStr = month < 10 ? `0${month}` : month;
-  const dayStr = day < 10 ? `0${day}` : day;
-  return `${year}-${monthStr}-${dayStr}`;
-};
-
-// Helper to parse Supabase date string (YYYY‑MM‑DD) to { year, month (0–11), day (1–31) }
-const parseSupabaseDate = (dateStr) => {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  return {
-    year,
-    month: month - 1, // convert 1‑indexed month to zero‑indexed
-    day
-  };
-}
-
-// Helper to convert weekday abbreviation (Sun, Mon, etc.) to day of month (1‑31) for given year/month
-// Returns the first occurrence of that weekday in the month
-const weekdayAbbrToDayOfMonth = (abbr, year, monthZeroIndexed) => {
-  const dayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-  const targetDow = dayMap[abbr.substring(0, 3)];
-  if (targetDow === undefined) return 1;
-  // Find first day of month that matches target weekday
-  for (let day = 1; day <= 7; day++) {
-    const date = new Date(year, monthZeroIndexed, day);
-    if (date.getDay() === targetDow) return day;
-  }
-  return 1; // fallback
-};
-
-// Parse day input (number or weekday abbreviation) to day of month (1‑31)
-const parseDay = (dayRaw, year, monthZeroIndexed) => {
-  if (!dayRaw) return 1;
-  const num = parseInt(dayRaw, 10);
-  if (!isNaN(num)) return Math.max(1, Math.min(num, 31));
-  // treat as weekday abbreviation
-  return weekdayAbbrToDayOfMonth(dayRaw, year, monthZeroIndexed);
-};
-
 export default function Schedule() {
-  const { user, profile } = useAuth()
-  const { hasRole } = usePermissions()
   const [view, setView] = useState('month')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [shifts, setShifts] = useState([])
   const [timeOff, setTimeOff] = useState([])
-  const [roleFilter, setRoleFilter] = useState('all') // all, bartender, server, cook, manager
   const [showAddShift, setShowAddShift] = useState(false)
   const [showCopyWeek, setShowCopyWeek] = useState(false)
-  const [showScheduleBuilder, setShowScheduleBuilder] = useState(false)
-  const [builderShifts, setBuilderShifts] = useState([])
-  const [profilesList, setProfilesList] = useState([])
   const [copyToMonth, setCopyToMonth] = useState(0)
   const [newShift, setNewShift] = useState({ name: '', day: 1, start: '16:00', end: '23:00' })
-  const [loading, setLoading] = useState(true)
   const csvRef = useRef(null)
-  const [showPatternModal, setShowPatternModal] = useState(false)
-  const [patternShift, setPatternShift] = useState({ 
-    staffId: '', 
-    role: 'staff', 
-    start: '16:00', 
-    end: '23:00', 
-    days: [1, 2, 3, 4, 5] // Monday–Friday (0=Sunday)
-  })
-
-  const currentMonth = currentDate.getMonth()
-  const currentYear = currentDate.getFullYear()
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-
-  // Fetch shifts from Supabase
-  const fetchShifts = useCallback(async () => {
-    setLoading(true)
-    try {
-      const { data, error } = await supabase
-        .from(TABLES.SHIFTS)
-        .select('*')
-        .order('date', { ascending: true })
-      
-      if (error) throw error
-
-      // Map Supabase rows to UI shape
-      const mapped = data.map(shift => ({
-        id: shift.id,
-        name: shift.staff_name || 'Shift',
-        role: shift.role,
-        ...parseSupabaseDate(shift.date),
-        start: shift.start_time,
-        end: shift.end_time
-      }))
-      setShifts(mapped)
-    } catch (err) {
-      console.error('Error fetching shifts:', err)
-      alert('Failed to load schedule from database.')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const fetchTimeOff = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from(TABLES.TIME_OFF)
-        .select('*')
-        .eq('status', 'approved')
-        .order('created_at', { ascending: false })
-      
-      if (error) throw error
-
-      // Detect month indexing: if any month > 11, assume 1‑indexed (calendar months) and convert to zero‑indexed
-      const hasOneIndexed = data && data.some(to => to.month > 11);
-      const mapped = (data || []).map(to => ({
-        ...to,
-        month: hasOneIndexed ? to.month - 1 : to.month
-      }));
-      if (hasOneIndexed) {
-        console.warn('Detected 1‑indexed months in time‑off requests; applying conversion. Run migration 20260408040000_fix_time_off_month_index.sql.');
-      }
-      setTimeOff(mapped)
-    } catch (err) {
-      console.error('Error fetching time off:', err)
-      alert('Failed to load time off from database.')
-    }
-  }, [])
-
-  const fetchProfiles = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from(TABLES.PROFILES)
-        .select('*')
-        .eq('status', 'approved')
-        .order('full_name', { ascending: true })
-      if (error) throw error
-      setProfilesList(data || [])
-    } catch (err) {
-      console.error('Error fetching profiles:', err)
-      alert('Failed to load staff list.')
-    }
-  }, [])
-
-  // Fetch time off from Supabase (approved only)
-  useEffect(() => {
-    fetchShifts()
-    fetchTimeOff()
-    fetchProfiles()
-  }, [fetchShifts, fetchTimeOff, fetchProfiles])
-
-  // Schedule Builder Functions
-  const loadExistingShifts = () => {
-    const existing = shifts.filter(s => s.year === currentYear && s.month === currentMonth)
-    const mapped = existing.map(s => ({
-      id: `builder-${s.id}`,
-      staffId: profilesList.find(p => p.full_name === s.name)?.id || '',
-      name: s.name,
-      day: s.day,
-      start: s.start,
-      end: s.end,
-      role: s.role || 'staff'
-    }))
-    setBuilderShifts(mapped)
-  }
-
-  const addEmptyShift = () => {
-    const newId = `temp-${Date.now()}-${Math.random()}`
-    setBuilderShifts(prev => [...prev, {
-      id: newId,
-      staffId: '',
-      name: '',
-      day: 1,
-      start: '16:00',
-      end: '23:00',
-      role: 'staff'
-    }])
-  }
-
-  const removeShift = (id) => {
-    setBuilderShifts(prev => prev.filter(s => s.id !== id))
-  }
-
-  const updateShift = (id, field, value) => {
-    setBuilderShifts(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s))
-  }
-
-  const copyLastMonth = () => {
-    const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1
-    const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear
-    const prevShifts = shifts.filter(s => s.year === prevYear && s.month === prevMonth)
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
-    const mapped = prevShifts.map(s => {
-      // Adjust day if it exceeds days in current month
-      const day = s.day > daysInMonth ? daysInMonth : s.day
-      return {
-        id: `copy-${s.id}-${Date.now()}`,
-        staffId: profilesList.find(p => p.full_name === s.name)?.id || '',
-        name: s.name,
-        day: day,
-        start: s.start,
-        end: s.end,
-        role: s.role || 'staff'
-      }
-    })
-    setBuilderShifts(prev => [...prev, ...mapped])
-    alert(`Added ${mapped.length} shifts from ${months[prevMonth]} ${prevYear}.`)
-  }
-
-  const updatePatternShift = (field, value) => {
-    setPatternShift(prev => ({ ...prev, [field]: value }))
-  }
-
-  const addPatternShifts = () => {
-    const { staffId, role, start, end, days } = patternShift
-    if (!staffId) {
-      alert('Please select a staff member.')
-      return
-    }
-    const staffProfile = profilesList.find(p => p.id === staffId)
-    if (!staffProfile) return
-
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
-    const newShifts = []
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(currentYear, currentMonth, day)
-      const weekday = date.getDay() // 0=Sunday, 1=Monday, ...
-      if (days.includes(weekday)) {
-        newShifts.push({
-          id: `pattern-${Date.now()}-${day}`,
-          staffId,
-          name: staffProfile.full_name,
-          day,
-          start,
-          end,
-          role
-        })
-      }
-    }
-    setBuilderShifts(prev => [...prev, ...newShifts])
-    setShowPatternModal(false)
-    alert(`Added ${newShifts.length} shifts for ${staffProfile.full_name}.`)
-  }
-
-  const generateSchedule = async () => {
-    if (!hasRole('manager')) {
-      alert('Only managers can generate schedules.')
-      return
-    }
-    if (!confirm(`Replace all shifts for ${months[currentMonth]} ${currentYear} with ${builderShifts.length} new shifts?`)) return
-
-    const shiftsToInsert = builderShifts.map(shift => {
-      const staffProfile = profilesList.find(p => p.id === shift.staffId)
-      return {
-        staff_name: staffProfile?.full_name || shift.name || 'Unknown',
-        date: formatDateForSupabase(currentYear, currentMonth, shift.day),
-        start_time: shift.start,
-        end_time: shift.end,
-        role: shift.role,
-        user_id: staffProfile?.id || user?.id
-      }
-    }).filter(s => s.staff_name && s.start_time && s.end_time)
-
-    if (shiftsToInsert.length === 0) {
-      alert('No valid shifts to insert.')
-      return
-    }
-
-    const builderConflicts = []
-    for (let i = 0; i < shiftsToInsert.length; i++) {
-      for (let j = i + 1; j < shiftsToInsert.length; j++) {
-        const left = shiftsToInsert[i]
-        const right = shiftsToInsert[j]
-        if (
-          left.staff_name === right.staff_name &&
-          left.date === right.date &&
-          shiftsOverlap(left.start_time, left.end_time, right.start_time, right.end_time)
-        ) {
-          builderConflicts.push(`${left.staff_name} on ${left.date} (${left.start_time}-${left.end_time} overlaps ${right.start_time}-${right.end_time})`)
-        }
-      }
-    }
-
-    if (builderConflicts.length > 0) {
-      alert(`Schedule conflicts found:\n\n${builderConflicts.slice(0, 5).join('\n')}${builderConflicts.length > 5 ? '\n...' : ''}`)
-      return
-    }
-
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
-    const startDate = formatDateForSupabase(currentYear, currentMonth, 1)
-    const endDate = formatDateForSupabase(currentYear, currentMonth, daysInMonth)
-
-    try {
-      // Delete existing shifts for the month
-      const { error: deleteError } = await supabase
-        .from(TABLES.SHIFTS)
-        .delete()
-        .gte('date', startDate)
-        .lte('date', endDate)
-      if (deleteError) throw deleteError
-
-      // Insert new shifts
-      const { data, error } = await supabase
-        .from(TABLES.SHIFTS)
-        .insert(shiftsToInsert)
-        .select('*')
-      if (error) throw error
-
-      // Refresh UI
-      await fetchShifts()
-      setShowScheduleBuilder(false)
-      alert(`Schedule generated with ${shiftsToInsert.length} shifts.`)
-    } catch (err) {
-      console.error('Error generating schedule:', err)
-      alert('Failed to generate schedule. Check console for details.')
-    }
-  }
-
-  // Add Shift to Supabase
-  const addShift = async (e) => {
-    e.preventDefault()
-    if (!user) {
-      alert('You must be logged in to add a shift.')
-      return
-    }
-
-    const hasConflict = shifts.some(existing =>
-      existing.name === newShift.name &&
-      existing.year === currentYear &&
-      existing.month === currentMonth &&
-      existing.day === Number(newShift.day) &&
-      shiftsOverlap(existing.start, existing.end, newShift.start, newShift.end)
-    )
-
-    if (hasConflict) {
-      alert('This staff member already has an overlapping shift on that day.')
-      return
-    }
-
-    const shiftDate = formatDateForSupabase(currentYear, currentMonth, newShift.day) // month already zero-indexed
-    const shiftToInsert = {
-      staff_name: newShift.name,
-      date: shiftDate,
-      start_time: newShift.start,
-      end_time: newShift.end,
-      user_id: user.id, // optional for phase 1, but we have user
-      role: profile?.role || 'staff'
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from(TABLES.SHIFTS)
-        .insert([shiftToInsert])
-        .select('*')
-
-      if (error) throw error
-
-      const inserted = data[0]
-      const uiShift = {
-        id: inserted.id,
-        name: inserted.staff_name,
-        role: inserted.role,
-        ...parseSupabaseDate(inserted.date),
-        start: inserted.start_time,
-        end: inserted.end_time
-      }
-      setShifts(prev => [...prev, uiShift])
-      setShowAddShift(false)
-      setNewShift({ name: '', day: 1, start: '16:00', end: '23:00' })
-    } catch (err) {
-      console.error('Error adding shift:', err)
-      alert('Failed to add shift to database.')
-    }
-  }
-
-  // Delete Shift from Supabase
-  const deleteShift = async (id) => {
-    if (!confirm('Delete this shift?')) return
-
-    try {
-      const { error } = await supabase
-        .from(TABLES.SHIFTS)
-        .delete()
-        .eq('id', id)
-      if (error) throw error
-
-      setShifts(prev => prev.filter(s => s.id !== id))
-    } catch (err) {
-      console.error('Error deleting shift:', err)
-      alert('Failed to delete shift from database.')
-    }
-  }
 
   const printSchedule = () => {
     document.body.classList.add('printing')
@@ -451,238 +31,113 @@ export default function Schedule() {
     })
   }
 
-  const clearAll = async () => {
-    if (!confirm('Clear ALL shifts and time off? This cannot be undone!')) return;
+  const currentMonth = currentDate.getMonth()
+  const currentYear = currentDate.getFullYear()
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
-    if (!hasRole('manager')) {
-      alert('Only managers can clear shifts.');
-      return;
-    }
+  useEffect(() => {
+    const savedShifts = localStorage.getItem(STORAGE_KEY)
+    if (savedShifts) setShifts(JSON.parse(savedShifts))
+    
+    const savedTimeOff = localStorage.getItem(TIME_OFF_KEY)
+    if (savedTimeOff) setTimeOff(JSON.parse(savedTimeOff))
+  }, [])
 
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-    const startDate = formatDateForSupabase(currentYear, currentMonth, 1);
-    const endDate = formatDateForSupabase(currentYear, currentMonth, daysInMonth);
+  const saveShifts = (newShifts) => {
+    setShifts(newShifts)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newShifts))
+  }
 
-    try {
-      // Delete shifts for the month
-      const { error: shiftError } = await supabase
-        .from(TABLES.SHIFTS)
-        .delete()
-        .gte('date', startDate)
-        .lte('date', endDate);
+  const addShift = (e) => {
+    e.preventDefault()
+    const shift = { ...newShift, month: currentMonth, year: currentYear, id: Date.now() }
+    saveShifts([...shifts, shift])
+    setShowAddShift(false)
+    setNewShift({ name: '', day: 1, start: '16:00', end: '23:00' })
+  }
 
-      if (shiftError) throw shiftError;
-
-      // Delete approved time-off entries for the month
-      const { error: timeOffError } = await supabase
-        .from(TABLES.TIME_OFF)
-        .delete()
-        .eq('month', currentMonth)
-        .eq('year', currentYear)
-        .eq('status', 'approved');
-
-      if (timeOffError) throw timeOffError;
-
-      // Refresh UI
-      await fetchShifts();
-      await fetchTimeOff();
-
-      alert(`Cleared all shifts and time‑off for ${months[currentMonth]} ${currentYear}.`);
-    } catch (err) {
-      console.error('Error clearing schedule:', err);
-      alert('Failed to clear schedule. Check console for details.');
+  const deleteShift = (id) => {
+    if (confirm('Delete this shift?')) {
+      saveShifts(shifts.filter(s => s.id !== id))
     }
   }
 
-  const refreshSchedule = () => {
-    fetchShifts()
-    fetchTimeOff()
+  const clearAll = () => {
+    if (confirm('Clear ALL shifts and time off? This cannot be undone!')) {
+      saveShifts([])
+      setTimeOff([])
+      localStorage.removeItem('barmanager_timeoff')
+    }
   }
 
   const exportCSV = () => {
-    const header = "Name,Day,Start,End,Role,Month,Year";
-    const data = shifts.map(s => {
-      const month = s.month !== undefined ? s.month + 1 : currentMonth + 1;
-      const year = s.year !== undefined ? s.year : currentYear;
-      return `${s.name},${s.day},${s.start},${s.end},${s.role || ''},${month},${year}`;
-    });
-    const csv = header + "\n" + data.join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `schedule-export-${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
+    const data = shifts.map(s => `${s.name},${s.day},${s.start},${s.end}`)
+    const csv = "Name,Day,Start,End\n" + data.join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `schedule-${currentYear}-${currentMonth + 1}.csv`
+    a.click()
   }
 
-  const handleCopyWeek = async () => {
+  const handleCopyWeek = () => {
     const weekShifts = shifts.filter(s => s.month === currentMonth && s.year === currentYear)
     if (weekShifts.length === 0) {
       alert('No shifts to copy from this month!')
       return
     }
-
-    const targetMonth = parseInt(copyToMonth)
-    const targetYear = currentYear
-    const targetDaysInMonth = new Date(targetYear, targetMonth + 1, 0).getDate()
-
-    // Build shifts to insert
-    const shiftsToInsert = []
-    for (const shift of weekShifts) {
-      if (shift.day > targetDaysInMonth) {
-        // Skip shifts that would land on a nonexistent day in target month
-        continue
-      }
-      shiftsToInsert.push({
-        staff_name: shift.name,
-        date: formatDateForSupabase(targetYear, targetMonth, shift.day),
-        start_time: shift.start,
-        end_time: shift.end,
-        role: shift.role || 'staff',
-        user_id: user?.id
-      })
-    }
-
-    if (shiftsToInsert.length === 0) {
-      alert('No valid shifts to copy (or all days exceed target month length).')
-      return
-    }
-
-    // Conflict detection with existing shifts in target month
-    const existingShiftsInTarget = shifts.filter(s => s.month === targetMonth && s.year === targetYear)
-    const conflicts = []
-    for (const newShift of shiftsToInsert) {
-      const { date, start_time, end_time, staff_name } = newShift
-      const { year, month, day } = parseSupabaseDate(date)
-      const hasConflict = existingShiftsInTarget.some(existing =>
-        existing.name === staff_name &&
-        existing.year === year &&
-        existing.month === month &&
-        existing.day === day &&
-        shiftsOverlap(existing.start, existing.end, start_time, end_time)
-      )
-      if (hasConflict) {
-        conflicts.push(`${staff_name} on ${date} (${start_time}-${end_time})`)
-      }
-    }
-
-    if (conflicts.length > 0) {
-      alert(`Copy conflicts found:\n\n${conflicts.slice(0,5).join('\n')}${conflicts.length > 5 ? '\n...' : ''}`)
-      return
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from(TABLES.SHIFTS)
-        .insert(shiftsToInsert)
-        .select('*')
-
-      if (error) throw error
-
-      // Refresh shifts from Supabase
-      await fetchShifts()
-      setShowCopyWeek(false)
-      alert(`Copied ${shiftsToInsert.length} shifts to ${months[targetMonth]} (saved to database).`)
-    } catch (err) {
-      console.error('Error copying shifts:', err)
-      alert('Failed to copy shifts to database.')
-    }
+    
+    // Copy only to the selected month
+    let added = 0
+    weekShifts.forEach(shift => {
+      const newShift = { ...shift, id: Date.now() + Math.random(), month: parseInt(copyToMonth) }
+      saveShifts([...shifts, newShift])
+      added++
+    })
+    
+    setShowCopyWeek(false)
+    alert(`Copied ${added} shifts to ${months[copyToMonth]}!`)
   }
 
-  const importCSV = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const text = event.target.result;
-      const lines = text.split('\n').filter(l => l.trim());
-      if (lines.length < 2) {
-        alert('CSV file is empty or has no data rows.');
-        return;
-      }
-
-      // Parse header
-      const headers = lines[0].split(',').map(h => h.trim());
-      const nameIdx = headers.findIndex(h => h.toLowerCase() === 'name');
-      const dayIdx = headers.findIndex(h => h.toLowerCase() === 'day');
-      const startIdx = headers.findIndex(h => h.toLowerCase() === 'start');
-      const endIdx = headers.findIndex(h => h.toLowerCase() === 'end');
-      const roleIdx = headers.findIndex(h => h.toLowerCase() === 'role');
-      const monthIdx = headers.findIndex(h => h.toLowerCase() === 'month');
-      const yearIdx = headers.findIndex(h => h.toLowerCase() === 'year');
-
-      if (nameIdx === -1 || dayIdx === -1) {
-        alert('CSV must have at least "Name" and "Day" columns.');
-        return;
-      }
-
-      const shiftsToInsert = [];
-      const errors = [];
-
-      for (let i = 1; i < lines.length; i++) {
-        const parts = lines[i].split(',').map(p => p.trim());
-        const name = parts[nameIdx];
-        if (!name) continue; // skip empty rows
-
-        const dayRaw = parts[dayIdx] || '1';
-        const start = parts[startIdx] || '16:00';
-        const end = parts[endIdx] || '23:00';
-        const role = parts[roleIdx] || (profile?.role || 'staff');
-        let month = currentMonth;
-        let year = currentYear;
-
-        if (monthIdx !== -1 && parts[monthIdx]) {
-          const monthVal = parseInt(parts[monthIdx]);
-          if (!isNaN(monthVal) && monthVal >= 1 && monthVal <= 12) {
-            month = monthVal - 1; // convert to zero-indexed
+  const importCSV = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const text = event.target.result
+      const lines = text.split('\n').filter(l => l.trim())
+      
+      const dayMap = {Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6}
+      const newShifts = []
+      
+      lines.forEach((line, i) => {
+        if (i === 0) return
+        const parts = line.split(',').map(s => s.trim())
+        const name = parts[0]
+        const dayRaw = parts[1]
+        const start = parts[2] || '16:00'
+        const end = parts[3] || '23:00'
+        
+        if (name) {
+          let dayNum
+          if (isNaN(dayRaw)) {
+            const shortDay = dayRaw.substring(0, 3)
+            dayNum = dayMap[shortDay] !== undefined ? dayMap[shortDay] + 1 : 1
+          } else {
+            dayNum = parseInt(dayRaw)
           }
+          
+          newShifts.push({ name, day: dayNum, start, end, month: currentMonth, year: currentYear, id: Date.now() + i })
         }
-        if (yearIdx !== -1 && parts[yearIdx]) {
-          const yearVal = parseInt(parts[yearIdx]);
-          if (!isNaN(yearVal) && yearVal >= 2000 && yearVal <= 2100) {
-            year = yearVal;
-          }
-        }
-
-        const day = parseDay(dayRaw, year, month);
-        const dateStr = formatDateForSupabase(year, month, day);
-
-        shiftsToInsert.push({
-          staff_name: name,
-          date: dateStr,
-          start_time: start,
-          end_time: end,
-          role: role,
-          user_id: user?.id,
-        });
-      }
-
-      if (shiftsToInsert.length === 0) {
-        alert('No valid shifts found in CSV.');
-        return;
-      }
-
-      try {
-        // Batch insert into Supabase
-        const { data, error } = await supabase
-          .from(TABLES.SHIFTS)
-          .insert(shiftsToInsert)
-          .select('*');
-
-        if (error) throw error;
-
-        // Refresh shifts from Supabase
-        await fetchShifts();
-        alert(`Successfully imported ${shiftsToInsert.length} shifts.`);
-      } catch (err) {
-        console.error('Error importing shifts:', err);
-        alert('Failed to import shifts. Check console for details.');
-      }
-    };
-
-    reader.readAsText(file);
-    csvRef.current.value = '';
+      })
+      
+      saveShifts([...shifts, ...newShifts])
+      alert(`Imported ${newShifts.length} shifts!`)
+    }
+    reader.readAsText(file)
+    csvRef.current.value = ''
   }
 
   const getMonthDays = () => {
@@ -695,368 +150,93 @@ export default function Schedule() {
 
   const { firstDay, daysInMonth } = getMonthDays()
   const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const getDisplayDate = () => {
-    if (view === 'week') {
-      const start = new Date(currentDate);
-      start.setDate(start.getDate() - start.getDay()); // Sunday
-      return start;
-    }
-    return currentDate;
-  };
-  const monthName = getDisplayDate().toLocaleString('default', { month: 'long', year: 'numeric' })
+  const monthName = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })
 
-  const prevView = () => {
-    if (view === 'week') {
-      setCurrentDate(new Date(currentDate.setDate(currentDate.getDate() - 7)))
-    } else {
-      setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))
-    }
-  }
-  const nextView = () => {
-    if (view === 'week') {
-      setCurrentDate(new Date(currentDate.setDate(currentDate.getDate() + 7)))
-    } else {
-      setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))
-    }
-  }
-  const goToday = () => setCurrentDate(new Date())
-
-  // Build list of days to show based on current view (week/month)
-  const getDaysToShow = () => {
-    const days = []
-    if (view === 'week') {
-      // Start of week (Sunday)
-      const start = new Date(currentDate)
-      start.setDate(start.getDate() - start.getDay())
-      for (let i = 0; i < 7; i++) {
-        const dayDate = new Date(start)
-        dayDate.setDate(start.getDate() + i)
-        const year = dayDate.getFullYear()
-        const month = dayDate.getMonth()
-        const day = dayDate.getDate()
-        const dayShifts = shifts.filter(s => 
-          s.year === year && 
-          s.month === month && 
-          s.day === day &&
-          (roleFilter === 'all' || s.role === roleFilter)
-        )
-        const dayTimeOff = timeOff.filter(to => 
-          to.year === year && 
-          to.month === month && 
-          to.days && 
-          String(to.days).split(',').map(d => parseInt(d.trim())).includes(day)
-        )
-        days.push({ date: dayDate, shifts: dayShifts, timeOff: dayTimeOff })
-      }
-    } else {
-      // Month view – all days of the current month
-      for (let i = 1; i <= daysInMonth; i++) {
-        const year = currentYear
-        const month = currentMonth
-        const day = i
-        const dayShifts = shifts.filter(s => 
-          s.year === year && 
-          s.month === month && 
-          s.day === day &&
-          (roleFilter === 'all' || s.role === roleFilter)
-        )
-        const dayTimeOff = timeOff.filter(to => 
-          to.year === year && 
-          to.month === month && 
-          to.days && 
-          String(to.days).split(',').map(d => parseInt(d.trim())).includes(day)
-        )
-        days.push({ date: new Date(year, month, day), shifts: dayShifts, timeOff: dayTimeOff })
-      }
-    }
-    return days
-  }
-
-  const formatDayHeader = (date) => {
-    return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-  }
-
-  if (loading) {
-    return (
-      <div className="space-y-6 pb-24 lg:pb-0">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Schedule</h1>
-          <div className="flex gap-2 flex-wrap print:hidden">
-            <div className="h-10 w-20 bg-bar-card rounded animate-pulse"></div>
-            <div className="h-10 w-20 bg-bar-card rounded animate-pulse"></div>
-            <div className="h-10 w-20 bg-bar-card rounded animate-pulse"></div>
-          </div>
-        </div>
-        <div className="flex items-center justify-center gap-4">
-          <div className="h-10 w-10 bg-bar-card rounded animate-pulse"></div>
-          <div className="h-10 w-40 bg-bar-card rounded animate-pulse"></div>
-          <div className="h-10 w-10 bg-bar-card rounded animate-pulse"></div>
-        </div>
-        <div className="grid grid-cols-7 gap-2">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <div key={i} className="h-8 bg-bar-card rounded animate-pulse"></div>
-          ))}
-          {Array.from({ length: 35 }).map((_, i) => (
-            <div key={i} className="h-24 bg-bar-card rounded animate-pulse"></div>
-          ))}
-        </div>
-      </div>
-    )
-  }
+  const prevMonth = () => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))
+  const nextMonth = () => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))
 
   return (
     <div className="space-y-6 pb-24 lg:pb-0">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Schedule</h1>
-          <p className="text-sm text-gray-400">Manage shifts faster on smaller screens</p>
-        </div>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Schedule</h1>
         <div className="flex gap-2 flex-wrap print:hidden">
-          {hasRole('manager') && (
-            <>
-              <button onClick={() => csvRef.current.click()} className="btn-secondary text-sm">📥 Import</button>
-              <button onClick={exportCSV} className="btn-secondary text-sm">📤 Export</button>
-              <button onClick={clearAll} className="btn-secondary text-sm text-red-400">🗑️ Clear</button>
-              <button onClick={() => setShowScheduleBuilder(true)} className="btn-secondary text-sm">🏗️ Build Month</button>
-            </>
-          )}
+          <button onClick={() => csvRef.current.click()} className="btn-secondary text-sm">📥 Import</button>
+          <button onClick={exportCSV} className="btn-secondary text-sm">📤 Export</button>
+          <button onClick={() => setShowCopyWeek(true)} className="btn-secondary text-sm">📋 Copy Week</button>
+          <button onClick={clearAll} className="btn-secondary text-sm text-red-400">🗑️ Clear</button>
           <button onClick={printSchedule} className="btn-secondary text-sm">🖨️ Print</button>
-          <button onClick={refreshSchedule} className="btn-secondary text-sm">🔄 Refresh</button>
           <button onClick={() => setView(view === 'week' ? 'month' : 'week')} className="btn-primary">
             {view === 'week' ? '📅 Month' : '📅 Week'}
           </button>
-          {hasRole('manager') && (
-            <button onClick={() => setShowAddShift(true)} className="btn-primary">
-              <PlusIcon className="w-4 h-4" /> Add
-            </button>
-          )}
+          <button onClick={() => setShowAddShift(true)} className="btn-primary">
+            <PlusIcon className="w-4 h-4" /> Add
+          </button>
         </div>
       </div>
       <input type="file" accept=".csv" ref={csvRef} onChange={importCSV} className="hidden" />
 
       
 
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <button onClick={prevView} className="p-3 bg-bar-card rounded-lg hover:bg-bar-blue transition-colors"><ChevronLeftIcon className="w-5 h-5" /></button>
-        <button onClick={goToday} className="px-4 py-3 bg-bar-accent rounded-lg text-sm font-semibold hover:bg-bar-accent/80 transition-colors">Today</button>
-        <h2 className="text-lg md:text-xl font-bold min-w-[200px] text-center flex-1">{monthName}</h2>
-        <button onClick={nextView} className="p-3 bg-bar-card rounded-lg hover:bg-bar-blue transition-colors"><ChevronRightIcon className="w-5 h-5" /></button>
-      </div>
-
-      {/* Role filter tabs */}
-      <div className="flex gap-2 overflow-x-auto md:justify-center md:flex-wrap mt-4 mb-2 pb-1">
-        <button 
-          onClick={() => setRoleFilter('all')} 
-          className={`px-4 py-2 rounded-lg ${roleFilter === 'all' ? 'bg-bar-accent font-semibold' : 'bg-bar-card hover:bg-bar-blue'}`}
-        >
-          All Roles
-        </button>
-        <button 
-          onClick={() => setRoleFilter('bartender')} 
-          className={`px-4 py-2 rounded-lg ${roleFilter === 'bartender' ? 'bg-bar-accent font-semibold' : 'bg-bar-card hover:bg-bar-blue'}`}
-        >
-          Bar
-        </button>
-        <button 
-          onClick={() => setRoleFilter('server')} 
-          className={`px-4 py-2 rounded-lg ${roleFilter === 'server' ? 'bg-bar-accent font-semibold' : 'bg-bar-card hover:bg-bar-blue'}`}
-        >
-          Server
-        </button>
-        <button 
-          onClick={() => setRoleFilter('cook')} 
-          className={`px-4 py-2 rounded-lg ${roleFilter === 'cook' ? 'bg-bar-accent font-semibold' : 'bg-bar-card hover:bg-bar-blue'}`}
-        >
-          Kitchen
-        </button>
-        <button 
-          onClick={() => setRoleFilter('manager')} 
-          className={`px-4 py-2 rounded-lg ${roleFilter === 'manager' ? 'bg-bar-accent font-semibold' : 'bg-bar-card hover:bg-bar-blue'}`}
-        >
-          Manager
-        </button>
+      <div className="flex items-center justify-center gap-4">
+        <button onClick={prevMonth} className="p-2 bg-bar-card rounded-lg"><ChevronLeftIcon className="w-5 h-5" /></button>
+        <h2 className="text-xl font-bold">{monthName}</h2>
+        <button onClick={nextMonth} className="p-2 bg-bar-card rounded-lg"><ChevronRightIcon className="w-5 h-5" /></button>
       </div>
 
       {view === 'week' ? (
-        <div className="space-y-6">
-          {/* Day‑stacked list for week view */}
-          {(() => {
-            const days = getDaysToShow()
-            const anyShiftsOrTimeOff = days.some(day => day.shifts.length > 0 || day.timeOff.length > 0)
-            return (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {days.map(({ date, shifts: dayShifts, timeOff: dayTimeOff }) => {
-                    const dayKey = date.toISOString().split('T')[0]
-                    const isEmpty = dayShifts.length === 0 && dayTimeOff.length === 0
-                    return (
-                      <div
-                        key={dayKey}
-                        className="bg-bar-card rounded-xl p-4 shadow-lg hover:shadow-xl transition-shadow"
-                      >
-                        <div className="flex justify-between items-center mb-3 pb-2 border-b border-bar-dark">
-                          <h3 className="font-bold text-xl">{formatDayHeader(date)}</h3>
-                          <span className="text-gray-400 text-sm">
-                            {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                          </span>
-                        </div>
-                        {isEmpty ? (
-                          <div className="text-center py-6 text-gray-400">
-                            <div className="text-lg">📅 No shifts</div>
-                            <p className="text-sm mt-1">Tap + to add a shift</p>
-                          </div>
-                        ) : (
-                          <div className="space-y-3">
-                            {dayShifts.map(s => {
-                              const hasConflict = dayShifts.some(other =>
-                                other.id !== s.id &&
-                                other.name === s.name &&
-                                shiftsOverlap(s.start, s.end, other.start, other.end)
-                              )
-
-                              return (
-                                <div
-                                  key={s.id}
-                                  className={`p-3 rounded-lg border-l-4 ${hasConflict ? 'border-red-500 bg-red-500/10' : `${getRoleColor(s.role)} border-opacity-80 bg-bar-blue/10`}`}
-                                >
-                                  <div className="flex justify-between items-center">
-                                    <div className="font-semibold">{s.name}</div>
-                                    {hasRole('manager') && (
-                                      <button
-                                        onClick={() => deleteShift(s.id)}
-                                        className="text-red-500 hover:bg-red-500/20 p-1 rounded"
-                                      >
-                                        <TrashIcon className="w-4 h-4" />
-                                      </button>
-                                    )}
-                                  </div>
-                                  <div className="text-gray-400 text-sm mt-1">
-                                    {formatTime12(s.start)} – {formatTime12(s.end)}
-                                  </div>
-                                  {s.role && (
-                                    <div className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-bar-dark text-gray-300">
-                                      {s.role}
-                                    </div>
-                                  )}
-                                  {hasConflict && (
-                                    <div className="mt-2 text-xs text-red-300">Conflicts with another shift for {s.name}</div>
-                                  )}
-                                </div>
-                              )
-                            })}
-                            {dayTimeOff.map(to => (
-                              <div
-                                key={to.id}
-                                className="bg-yellow-600/20 border-l-4 border-yellow-600 p-3 rounded-lg"
-                              >
-                                <div className="font-semibold text-yellow-300">⛱️ OFF: {to.name}</div>
-                                <div className="text-gray-300 text-sm">{to.dates}</div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-                {!anyShiftsOrTimeOff && (
-                  <div className="text-center py-8 text-gray-400">
-                    No shifts scheduled this week. Add one to get started!
+        <div className="grid grid-cols-7 gap-2">
+          {weekDays.map((d, idx) => (
+            <div key={d}>
+              <div className="text-center p-2 bg-bar-card rounded-t-lg font-semibold">{d}</div>
+              <div className="mt-2 min-h-[150px] bg-bar-blue/30 p-2 space-y-2">
+                {shifts.filter(s => s.day === idx + 1 && s.month === currentMonth && s.year === currentYear).map(s => (
+                  <div key={s.id} className="bg-bar-card p-2 rounded text-xs relative group">
+                    <div className="font-semibold">{s.name}</div>
+                    <div className="text-gray-400">{s.start} - {s.end}</div>
+                    <button onClick={() => deleteShift(s.id)} className="absolute top-1 right-1 text-red-500 opacity-0 group-hover:opacity-100">
+                      <TrashIcon className="w-3 h-3" />
+                    </button>
                   </div>
-                )}
-              </>
-            )
-          })()}
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
-        <div className="space-y-6">
-          {/* Day‑stacked list (mobile: single column, desktop: multi‑column) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {getDaysToShow().map(({ date, shifts: dayShifts, timeOff: dayTimeOff }) => {
-              const dayKey = date.toISOString().split('T')[0]
-              const isEmpty = dayShifts.length === 0 && dayTimeOff.length === 0
-              return (
-                <div
-                  key={dayKey}
-                  className="bg-bar-card rounded-xl p-4 shadow-lg hover:shadow-xl transition-shadow"
-                >
-                  <div className="flex justify-between items-center mb-3 pb-2 border-b border-bar-dark">
-                    <h3 className="font-bold text-xl">{formatDayHeader(date)}</h3>
-                    <span className="text-gray-400 text-sm">
-                      {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </span>
+        <div className="grid grid-cols-7 gap-1 text-sm">
+          {weekDays.map(d => (
+            <div key={d} className="text-center p-1 bg-bar-card font-bold">{d}</div>
+          ))}
+          {Array.from({ length: firstDay }).map((_, i) => (
+            <div key={`empty-${i}`} className="bg-bar-dark/50 p-2 min-h-[80px]"></div>
+          ))}
+          {Array.from({ length: daysInMonth }).map((_, i) => {
+            const dayNum = i + 1
+            return (
+              <div key={dayNum} className="bg-bar-blue/20 p-1 min-h-[80px]">
+                <div className="text-sm font-bold text-center">{dayNum}</div>
+                {shifts.filter(s => s.day === dayNum && s.month === currentMonth && s.year === currentYear).map(s => (
+                  <div key={s.id} className="bg-bar-card p-1 rounded text-xs mt-1 relative group">
+                    <div className="font-semibold truncate">{s.name}</div>
+                    <div className="text-gray-400 text-xs">{s.start}-{s.end}</div>
+                    <button onClick={() => deleteShift(s.id)} className="absolute top-0 right-0 text-red-500 opacity-0 group-hover:opacity-100 bg-bar-card rounded">
+                      <TrashIcon className="w-3 h-3" />
+                    </button>
                   </div>
-                  {isEmpty ? (
-                    <div className="text-center py-6 text-gray-400">
-                      <div className="text-lg">📅 No shifts</div>
-                      <p className="text-sm mt-1">Tap + to add a shift</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {dayShifts.map(s => {
-                        const hasConflict = dayShifts.some(other =>
-                          other.id !== s.id &&
-                          other.name === s.name &&
-                          shiftsOverlap(s.start, s.end, other.start, other.end)
-                        )
-
-                        return (
-                          <div
-                            key={s.id}
-                            className={`p-3 rounded-lg border-l-4 ${hasConflict ? 'border-red-500 bg-red-500/10' : `${getRoleColor(s.role)} border-opacity-80 bg-bar-blue/10`}`}
-                          >
-                            <div className="flex justify-between items-center">
-                              <div className="font-semibold">{s.name}</div>
-                              {hasRole('manager') && (
-                                <button
-                                  onClick={() => deleteShift(s.id)}
-                                  className="text-red-500 hover:bg-red-500/20 p-1 rounded"
-                                >
-                                  <TrashIcon className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
-                            <div className="text-gray-400 text-sm mt-1">
-                              {formatTime12(s.start)} – {formatTime12(s.end)}
-                            </div>
-                            {s.role && (
-                              <div className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-bar-dark text-gray-300">
-                                {s.role}
-                              </div>
-                            )}
-                            {hasConflict && (
-                              <div className="mt-2 text-xs text-red-300">Conflicts with another shift for {s.name}</div>
-                            )}
-                          </div>
-                        )
-                      })}
-                      {dayTimeOff.map(to => (
-                        <div
-                          key={to.id}
-                          className="bg-yellow-600/20 border-l-4 border-yellow-600 p-3 rounded-lg"
-                        >
-                          <div className="font-semibold text-yellow-300">⛱️ OFF: {to.name}</div>
-                          <div className="text-gray-300 text-sm">{to.dates}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-          {shifts.filter(s => s.month === currentMonth && s.year === currentYear).length === 0 && (
-            <div className="text-center py-8 text-gray-400">
-              No shifts scheduled this month. Add one to get started!
-            </div>
-          )}
+                ))}
+                {getTimeOffDays(dayNum).map(to => (
+                  <div key={to.id} className="bg-yellow-600 p-1 rounded text-xs mt-1">OFF: {to.name}</div>
+                ))}
+              </div>
+            )
+          })}
         </div>
       )}
 
       {/* Copy Week Modal */}
       {showCopyWeek && (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 z-50">
-          <div className="bg-bar-card p-4 md:p-6 rounded-t-2xl md:rounded-xl w-full max-w-full md:max-w-md mx-auto md:mx-0">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-bar-card p-6 rounded-xl w-full max-w-md">
             <h2 className="text-xl font-bold mb-4">📋 Copy Week to Another Month</h2>
             <p className="text-gray-400 mb-4">Which month do you want to copy this week's schedule to?</p>
             <select 
@@ -1077,8 +257,8 @@ export default function Schedule() {
       )}
 
       {showAddShift && (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 z-50">
-          <form onSubmit={addShift} className="bg-bar-card p-4 md:p-6 rounded-t-2xl md:rounded-xl w-full max-w-full md:max-w-md space-y-3 mx-auto md:mx-0">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <form onSubmit={addShift} className="bg-bar-card p-6 rounded-xl w-full max-w-md space-y-3">
             <h2 className="text-xl font-bold">Add Shift for {monthName}</h2>
             <input placeholder="Staff name" className="input" value={newShift.name} onChange={e => setNewShift({...newShift, name: e.target.value})} required />
             <input type="number" min="1" max={daysInMonth} placeholder={`Day (1-${daysInMonth})`} className="input" value={newShift.day} onChange={e => setNewShift({...newShift, day: +e.target.value})} />
@@ -1091,216 +271,6 @@ export default function Schedule() {
               <button className="btn-primary flex-1">Add Shift</button>
             </div>
           </form>
-        </div>
-      )}
-
-      {showScheduleBuilder && (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 z-50">
-          <div className="bg-bar-card p-4 md:p-6 rounded-t-2xl md:rounded-xl w-full max-w-full md:max-w-lg mx-auto md:mx-0 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">🏗️ Build Month Schedule</h2>
-            <p className="text-gray-400 mb-4">Create shifts for {monthName}.</p>
-            
-            <div className="flex flex-wrap gap-2 mb-6">
-              <button onClick={loadExistingShifts} className="btn-secondary text-sm">📥 Load Existing Shifts</button>
-              <button onClick={addEmptyShift} className="btn-primary text-sm">➕ Add Shift</button>
-              <button onClick={() => setShowPatternModal(true)} className="btn-secondary text-sm">📅 Add Pattern</button>
-              <button onClick={copyLastMonth} className="btn-secondary text-sm">📋 Copy Last Month</button>
-              <button onClick={() => setBuilderShifts([])} className="btn-secondary text-sm text-red-400">🗑️ Clear All</button>
-            </div>
-            
-            <div className="space-y-4 mb-6">
-              {builderShifts.length === 0 ? (
-                <div className="text-center py-8 text-gray-400">
-                  No shifts added yet. Click “Add Shift” to start.
-                </div>
-              ) : (
-                builderShifts.map(shift => (
-                  <div key={shift.id} className="bg-bar-blue/10 p-4 rounded-xl border border-bar-blue/20 space-y-3">
-                    <div className="flex justify-between items-center">
-                      <h3 className="font-semibold text-lg">Shift #{builderShifts.indexOf(shift) + 1}</h3>
-                      <button onClick={() => removeShift(shift.id)} className="text-red-500 hover:bg-red-500/20 p-1 rounded">
-                        <TrashIcon className="w-5 h-5" />
-                      </button>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {/* Day */}
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">Day</label>
-                        <select 
-                          className="input w-full" 
-                          value={shift.day} 
-                          onChange={e => updateShift(shift.id, 'day', parseInt(e.target.value))}
-                        >
-                          {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
-                            <option key={d} value={d}>{d}</option>
-                          ))}
-                        </select>
-                      </div>
-                      
-                      {/* Staff */}
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">Staff</label>
-                        <select 
-                          className="input w-full" 
-                          value={shift.staffId} 
-                          onChange={e => updateShift(shift.id, 'staffId', e.target.value)}
-                        >
-                          <option value="">Select staff...</option>
-                          {profilesList.map(p => (
-                            <option key={p.id} value={p.id}>{p.full_name} ({p.role})</option>
-                          ))}
-                        </select>
-                      </div>
-                      
-                      {/* Start Time */}
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">Start</label>
-                        <input 
-                          type="time" 
-                          className="input w-full" 
-                          value={shift.start} 
-                          onChange={e => updateShift(shift.id, 'start', e.target.value)}
-                        />
-                      </div>
-                      
-                      {/* End Time */}
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">End</label>
-                        <input 
-                          type="time" 
-                          className="input w-full" 
-                          value={shift.end} 
-                          onChange={e => updateShift(shift.id, 'end', e.target.value)}
-                        />
-                      </div>
-                      
-                      {/* Role */}
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">Role</label>
-                        <select 
-                          className="input w-full" 
-                          value={shift.role} 
-                          onChange={e => updateShift(shift.id, 'role', e.target.value)}
-                        >
-                          <option value="staff">Staff</option>
-                          <option value="bartender">Bartender</option>
-                          <option value="server">Server</option>
-                          <option value="cook">Cook</option>
-                          <option value="manager">Manager</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            
-            <div className="flex gap-2 mt-6">
-              <button onClick={() => setShowScheduleBuilder(false)} className="btn-secondary flex-1">Cancel</button>
-              <button onClick={generateSchedule} className="btn-primary flex-1">Generate Schedule</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showPatternModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 z-50">
-          <div className="bg-bar-card p-4 md:p-6 rounded-t-2xl md:rounded-xl w-full max-w-full md:max-w-md mx-auto md:mx-0 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">📅 Add Pattern Shifts</h2>
-            <p className="text-gray-400 mb-4">Add shifts for a staff member across selected weekdays for the entire month.</p>
-            
-            <div className="space-y-4">
-              {/* Staff */}
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Staff</label>
-                <select 
-                  className="input w-full" 
-                  value={patternShift.staffId}
-                  onChange={e => updatePatternShift('staffId', e.target.value)}
-                >
-                  <option value="">Select staff...</option>
-                  {profilesList.map(p => (
-                    <option key={p.id} value={p.id}>{p.full_name} ({p.role})</option>
-                  ))}
-                </select>
-              </div>
-              
-              {/* Role */}
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Role</label>
-                <select 
-                  className="input w-full" 
-                  value={patternShift.role}
-                  onChange={e => updatePatternShift('role', e.target.value)}
-                >
-                  <option value="staff">Staff</option>
-                  <option value="bartender">Bartender</option>
-                  <option value="server">Server</option>
-                  <option value="cook">Cook</option>
-                  <option value="manager">Manager</option>
-                </select>
-              </div>
-              
-              {/* Start & End Time */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">Start</label>
-                  <input 
-                    type="time" 
-                    className="input w-full" 
-                    value={patternShift.start}
-                    onChange={e => updatePatternShift('start', e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">End</label>
-                  <input 
-                    type="time" 
-                    className="input w-full" 
-                    value={patternShift.end}
-                    onChange={e => updatePatternShift('end', e.target.value)}
-                  />
-                </div>
-              </div>
-              
-              {/* Weekday Checkboxes */}
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">Repeat on weekdays</label>
-                <div className="flex flex-wrap gap-3">
-                  {[
-                    { value: 1, label: 'Monday' },
-                    { value: 2, label: 'Tuesday' },
-                    { value: 3, label: 'Wednesday' },
-                    { value: 4, label: 'Thursday' },
-                    { value: 5, label: 'Friday' },
-                    { value: 6, label: 'Saturday' },
-                    { value: 0, label: 'Sunday' }
-                  ].map(({ value, label }) => (
-                    <label key={value} className="flex items-center gap-2">
-                      <input 
-                        type="checkbox" 
-                        checked={patternShift.days.includes(value)}
-                        onChange={(e) => {
-                          const newDays = e.target.checked
-                            ? [...patternShift.days, value]
-                            : patternShift.days.filter(d => d !== value)
-                          updatePatternShift('days', newDays)
-                        }}
-                        className="rounded"
-                      />
-                      <span className="text-sm">{label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex gap-2 mt-6">
-              <button onClick={() => setShowPatternModal(false)} className="btn-secondary flex-1">Cancel</button>
-              <button onClick={addPatternShifts} className="btn-primary flex-1">Add Pattern Shifts</button>
-            </div>
-          </div>
         </div>
       )}
     </div>
