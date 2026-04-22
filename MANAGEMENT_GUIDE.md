@@ -1,5 +1,13 @@
-# BarManager - Management Guide
-## How to Use This App (Plain English)
+# ⚠️ LEGACY GUIDE – OUTDATED
+
+**This guide describes an older version of BarManager that used local‑storage and had no login.**
+
+**For the current version (with Supabase, RBAC, conflict detection, mobile UI, and admin panel), please see [BARMANAGER_USER_GUIDE.md](BARMANAGER_USER_GUIDE.md).**
+
+---
+
+# BarManager - Management Guide (Legacy)
+## How to Use This App (Plain English) – OLD VERSION
 
 ---
 

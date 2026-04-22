@@ -1,5 +1,7 @@
 # Step-by-Step Setup Guide for BarManager
 
+> ⚠️ **This setup guide is partially outdated.** It covers initial Supabase project creation but does not include the RBAC migrations and recent feature enhancements. For the most up‑to‑date deployment instructions, refer to the **README.md** and run all migrations in chronological order.
+
 ## Part 1: Set Up Supabase (Free Database)
 
 ### 1. Create Account
