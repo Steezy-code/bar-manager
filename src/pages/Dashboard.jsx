@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { ExclamationTriangleIcon, PlusIcon } from '@heroicons/react/24/outline'
-
-const INV_KEY = 'barmanager_inventory'
+import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
+import { supabase } from '../lib/supabase'
+import { TABLES } from '../lib/supabase'
 
 const getGreeting = () => {
   const hour = new Date().getHours()
@@ -15,21 +15,48 @@ export default function Dashboard() {
   const [lowStock, setLowStock] = useState(0)
   const [lowItems, setLowItems] = useState([])
   const [greeting, setGreeting] = useState(getGreeting())
+  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const saved = localStorage.getItem(INV_KEY)
-    if (saved) {
-      const items = JSON.parse(saved)
-      const low = items.filter(i => i.quantity <= (i.threshold || 5))
+  const fetchInventory = useCallback(async () => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.INVENTORY)
+        .select('*')
+        .order('name', { ascending: true })
+      
+      if (error) throw error
+
+      const low = data.filter(i => i.quantity <= (i.threshold || 5))
       setLowStock(low.length)
       setLowItems(low)
+    } catch (err) {
+      console.error('Error fetching inventory for dashboard:', err)
+      // Silently fail, low stock alert just won't show
+    } finally {
+      setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    fetchInventory()
+  }, [fetchInventory])
 
   useEffect(() => {
     const interval = setInterval(() => setGreeting(getGreeting()), 60000)
     return () => clearInterval(interval)
   }, [])
+
+  if (loading) {
+    return (
+      <div className="space-y-6 pb-24 lg:pb-0">
+        <h1 className="text-2xl font-bold">{greeting} 👋</h1>
+        <div className="card">
+          <div className="text-gray-400">Loading dashboard...</div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 pb-24 lg:pb-0">
