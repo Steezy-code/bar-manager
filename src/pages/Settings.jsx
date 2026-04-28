@@ -1,10 +1,12 @@
 import { useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { TABLES } from '../lib/supabase'
+import { useNotifications } from '../components/Notifications'
 
 export default function Settings() {
   const fileRef = useRef(null)
   const [msg, setMsg] = useState('')
+  const { confirmAction } = useNotifications()
 
   const exportData = async () => {
     try {
@@ -66,7 +68,13 @@ export default function Settings() {
           return
         }
 
-        if (!confirm(`This will replace ALL data in the database with the imported file. Continue?`)) {
+        const confirmed = await confirmAction({
+          title: 'Replace all app data?',
+          message: 'This will replace all data in the database with the imported file.',
+          confirmLabel: 'Replace',
+          danger: true
+        })
+        if (!confirmed) {
           return
         }
 

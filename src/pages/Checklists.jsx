@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { TABLES } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
+import { useNotifications } from '../components/Notifications'
 
 const defaultTasks = {
   opening: [{id:1,t:'Check walk-in temps',c:false},{id:2,t:'Count drawer cash',c:false},{id:3,t:'Stock condiments',c:false}],
@@ -14,6 +15,7 @@ const defaultTasks = {
 export default function Checklists() {
   const { user } = useAuth()
   const { hasRole } = usePermissions()
+  const { confirmAction } = useNotifications()
   const canOverrideCompletion = hasRole('manager')
   const [list, setList] = useState('opening')
   const [tasks, setTasks] = useState(defaultTasks)
@@ -219,13 +221,19 @@ export default function Checklists() {
     setNewL('')
   }
 
-  const deleteList = (listKey) => {
-    if (confirm('Delete entire "' + listKey + '" list?')) {
-      const newTasks = {...tasks}
-      delete newTasks[listKey]
-      save(newTasks)
-      setList(Object.keys(newTasks)[0] || 'opening')
-    }
+  const deleteList = async (listKey) => {
+    const confirmed = await confirmAction({
+      title: 'Delete checklist?',
+      message: `Delete the entire "${listKey}" list?`,
+      confirmLabel: 'Delete',
+      danger: true
+    })
+    if (!confirmed) return
+
+    const newTasks = {...tasks}
+    delete newTasks[listKey]
+    save(newTasks)
+    setList(Object.keys(newTasks)[0] || 'opening')
   }
 
   const printChecklist = () => {

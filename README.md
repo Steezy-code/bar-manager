@@ -192,6 +192,15 @@ npm install
 npm run dev
 ```
 
+If Vite or Rollup reports a missing optional native package such as
+`@rollup/rollup-win32-x64-msvc`, reinstall dependencies on the same
+operating system you are using to run the app:
+
+```powershell
+Remove-Item node_modules -Recurse -Force
+npm install
+```
+
 ## File Structure
 
 ```
