@@ -3,9 +3,11 @@ import { supabase } from '../lib/supabase';
 import { TABLES } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { PencilIcon, CheckIcon, XMarkIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { useNotifications } from '../components/Notifications';
 
 export default function Admin() {
   const { profile } = useAuth();
+  const { confirmAction } = useNotifications();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
@@ -133,7 +135,13 @@ export default function Admin() {
   };
 
   const removeUser = async (userId, userName) => {
-    if (!confirm(`Remove user "${userName}"? They will no longer appear in the list but can be restored by an admin.`)) return;
+    const confirmed = await confirmAction({
+      title: 'Remove user?',
+      message: `Remove "${userName}"? They will no longer appear in the list but can be restored by an admin.`,
+      confirmLabel: 'Remove',
+      danger: true
+    });
+    if (!confirmed) return;
     const { error } = await supabase
       .from(TABLES.PROFILES)
       .update({ status: 'removed' })

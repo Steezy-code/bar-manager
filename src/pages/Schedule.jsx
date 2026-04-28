@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { TABLES } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
+import { useNotifications } from '../components/Notifications'
 
 // Format HH:MM to h:mm AM/PM
 const formatTime12 = (time24) => {
@@ -87,8 +88,9 @@ const parseDay = (dayRaw, year, monthZeroIndexed) => {
 };
 
 export default function Schedule() {
-  const { user, profile } = useAuth()
+  const { user } = useAuth()
   const { hasRole } = usePermissions()
+  const { notify, confirmAction } = useNotifications()
   const [view, setView] = useState('month')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [shifts, setShifts] = useState([])
@@ -99,8 +101,9 @@ export default function Schedule() {
   const [showScheduleBuilder, setShowScheduleBuilder] = useState(false)
   const [builderShifts, setBuilderShifts] = useState([])
   const [profilesList, setProfilesList] = useState([])
+  const [profilesUnavailable, setProfilesUnavailable] = useState(false)
   const [copyToMonth, setCopyToMonth] = useState(0)
-  const [newShift, setNewShift] = useState({ name: '', day: 1, start: '16:00', end: '23:00' })
+  const [newShift, setNewShift] = useState({ staffId: '', name: '', day: 1, start: '16:00', end: '23:00', role: 'server' })
   const [loading, setLoading] = useState(true)
   const csvRef = useRef(null)
   const [showPatternModal, setShowPatternModal] = useState(false)
@@ -180,9 +183,11 @@ export default function Schedule() {
         .order('full_name', { ascending: true })
       if (error) throw error
       setProfilesList(data || [])
+      setProfilesUnavailable(false)
     } catch (err) {
       console.error('Error fetching profiles:', err)
-      alert('Failed to load staff list.')
+      setProfilesList([])
+      setProfilesUnavailable(true)
     }
   }, [])
 
@@ -291,7 +296,13 @@ export default function Schedule() {
       alert('Only managers can generate schedules.')
       return
     }
-    if (!confirm(`Replace all shifts for ${months[currentMonth]} ${currentYear} with ${builderShifts.length} new shifts?`)) return
+    const confirmed = await confirmAction({
+      title: 'Replace month schedule?',
+      message: `Replace all shifts for ${months[currentMonth]} ${currentYear} with ${builderShifts.length} new shifts?`,
+      confirmLabel: 'Replace',
+      danger: true
+    })
+    if (!confirmed) return
 
     const shiftsToInsert = builderShifts.map(shift => {
       const staffProfile = profilesList.find(p => p.id === shift.staffId)
@@ -353,7 +364,7 @@ export default function Schedule() {
       // Refresh UI
       await fetchShifts()
       setShowScheduleBuilder(false)
-      alert(`Schedule generated with ${shiftsToInsert.length} shifts.`)
+      notify(`Schedule generated with ${shiftsToInsert.length} shifts.`, 'success')
     } catch (err) {
       console.error('Error generating schedule:', err)
       alert('Failed to generate schedule. Check console for details.')
@@ -368,8 +379,16 @@ export default function Schedule() {
       return
     }
 
+    const selectedProfile = profilesList.find(p => p.id === newShift.staffId)
+    const staffName = selectedProfile?.full_name || selectedProfile?.email || newShift.name.trim()
+
+    if (!staffName) {
+      alert('Choose or enter a staff name.')
+      return
+    }
+
     const hasConflict = shifts.some(existing =>
-      existing.name === newShift.name &&
+      existing.name === staffName &&
       existing.year === currentYear &&
       existing.month === currentMonth &&
       existing.day === Number(newShift.day) &&
@@ -383,12 +402,12 @@ export default function Schedule() {
 
     const shiftDate = formatDateForSupabase(currentYear, currentMonth, newShift.day) // month already zero-indexed
     const shiftToInsert = {
-      staff_name: newShift.name,
+      staff_name: staffName,
       date: shiftDate,
       start_time: newShift.start,
       end_time: newShift.end,
-      user_id: user.id, // optional for phase 1, but we have user
-      role: profile?.role || 'staff'
+      user_id: selectedProfile?.id || user.id,
+      role: newShift.role || 'server'
     }
 
     try {
@@ -410,7 +429,8 @@ export default function Schedule() {
       }
       setShifts(prev => [...prev, uiShift])
       setShowAddShift(false)
-      setNewShift({ name: '', day: 1, start: '16:00', end: '23:00' })
+      setNewShift({ staffId: '', name: '', day: 1, start: '16:00', end: '23:00', role: 'server' })
+      notify('Shift added.', 'success')
     } catch (err) {
       console.error('Error adding shift:', err)
       alert('Failed to add shift to database.')
@@ -419,7 +439,13 @@ export default function Schedule() {
 
   // Delete Shift from Supabase
   const deleteShift = async (id) => {
-    if (!confirm('Delete this shift?')) return
+    const confirmed = await confirmAction({
+      title: 'Delete shift?',
+      message: 'This shift will be removed from the schedule.',
+      confirmLabel: 'Delete',
+      danger: true
+    })
+    if (!confirmed) return
 
     try {
       const { error } = await supabase
@@ -429,6 +455,7 @@ export default function Schedule() {
       if (error) throw error
 
       setShifts(prev => prev.filter(s => s.id !== id))
+      notify('Shift deleted.', 'success')
     } catch (err) {
       console.error('Error deleting shift:', err)
       alert('Failed to delete shift from database.')
@@ -452,7 +479,13 @@ export default function Schedule() {
   }
 
   const clearAll = async () => {
-    if (!confirm('Clear ALL shifts and time off? This cannot be undone!')) return;
+    const confirmed = await confirmAction({
+      title: 'Clear schedule?',
+      message: 'Clear all shifts and approved time off for this month? This cannot be undone.',
+      confirmLabel: 'Clear',
+      danger: true
+    })
+    if (!confirmed) return;
 
     if (!hasRole('manager')) {
       alert('Only managers can clear shifts.');
@@ -487,7 +520,7 @@ export default function Schedule() {
       await fetchShifts();
       await fetchTimeOff();
 
-      alert(`Cleared all shifts and time‑off for ${months[currentMonth]} ${currentYear}.`);
+      notify(`Cleared all shifts and time off for ${months[currentMonth]} ${currentYear}.`, 'success');
     } catch (err) {
       console.error('Error clearing schedule:', err);
       alert('Failed to clear schedule. Check console for details.');
@@ -1080,12 +1113,39 @@ export default function Schedule() {
         <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 z-50">
           <form onSubmit={addShift} className="bg-bar-card p-4 md:p-6 rounded-t-2xl md:rounded-xl w-full max-w-full md:max-w-md space-y-3 mx-auto md:mx-0">
             <h2 className="text-xl font-bold">Add Shift for {monthName}</h2>
-            <input placeholder="Staff name" className="input" value={newShift.name} onChange={e => setNewShift({...newShift, name: e.target.value})} required />
+            {profilesList.length > 0 ? (
+              <select
+                className="input"
+                value={newShift.staffId}
+                onChange={e => {
+                  const selected = profilesList.find(p => p.id === e.target.value)
+                  setNewShift({ ...newShift, staffId: e.target.value, name: selected?.full_name || '' })
+                }}
+                required
+              >
+                <option value="">Select staff...</option>
+                {profilesList.map(p => (
+                  <option key={p.id} value={p.id}>{p.full_name || p.email} ({p.role})</option>
+                ))}
+              </select>
+            ) : (
+              <input placeholder="Staff name" className="input" value={newShift.name} onChange={e => setNewShift({...newShift, name: e.target.value})} required />
+            )}
+            {profilesUnavailable && (
+              <p className="text-xs text-yellow-300">Staff list is unavailable, so you can still enter a name manually.</p>
+            )}
             <input type="number" min="1" max={daysInMonth} placeholder={`Day (1-${daysInMonth})`} className="input" value={newShift.day} onChange={e => setNewShift({...newShift, day: +e.target.value})} />
             <div className="flex gap-2">
               <input type="time" className="input" value={newShift.start} onChange={e => setNewShift({...newShift, start: e.target.value})} />
               <input type="time" className="input" value={newShift.end} onChange={e => setNewShift({...newShift, end: e.target.value})} />
             </div>
+            <select className="input" value={newShift.role} onChange={e => setNewShift({ ...newShift, role: e.target.value })}>
+              <option value="bartender">Bartender</option>
+              <option value="server">Server</option>
+              <option value="cook">Cook</option>
+              <option value="manager">Manager</option>
+              <option value="staff">Staff</option>
+            </select>
             <div className="flex gap-2">
               <button type="button" onClick={() => setShowAddShift(false)} className="btn-secondary flex-1">Cancel</button>
               <button className="btn-primary flex-1">Add Shift</button>
