@@ -43,8 +43,6 @@ const getRoleColor = (role) => {
   }
 }
 
-const TIME_OFF_KEY = 'barmanager_timeoff'
-
 // Helper to convert day/month/year to Supabase date string (YYYY-MM-DD)
 // Helper to convert year, zero‑indexed month (0–11), day (1–31) to Supabase date string (YYYY‑MM‑DD)
 const formatDateForSupabase = (year, monthZeroIndexed, day) => {
@@ -142,11 +140,11 @@ export default function Schedule() {
       setShifts(mapped)
     } catch (err) {
       console.error('Error fetching shifts:', err)
-      alert('Failed to load schedule from database.')
+      notify('Failed to load schedule from database.', 'error')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [notify])
 
   const fetchTimeOff = useCallback(async () => {
     try {
@@ -170,7 +168,7 @@ export default function Schedule() {
       setTimeOff(mapped)
     } catch (err) {
       console.error('Error fetching time off:', err)
-      alert('Failed to load time off from database.')
+      notify('Failed to load time off from database.', 'error')
     }
   }, [])
 
@@ -189,7 +187,7 @@ export default function Schedule() {
       setProfilesList([])
       setProfilesUnavailable(true)
     }
-  }, [])
+  }, [notify])
 
   // Fetch time off from Supabase (approved only)
   useEffect(() => {
@@ -253,7 +251,7 @@ export default function Schedule() {
       }
     })
     setBuilderShifts(prev => [...prev, ...mapped])
-    alert(`Added ${mapped.length} shifts from ${months[prevMonth]} ${prevYear}.`)
+    notify(`Added ${mapped.length} shifts from ${months[prevMonth]} ${prevYear}.`, 'success')
   }
 
   const updatePatternShift = (field, value) => {
@@ -263,7 +261,7 @@ export default function Schedule() {
   const addPatternShifts = () => {
     const { staffId, role, start, end, days } = patternShift
     if (!staffId) {
-      alert('Please select a staff member.')
+      notify('Please select a staff member.', 'error')
       return
     }
     const staffProfile = profilesList.find(p => p.id === staffId)
@@ -288,12 +286,12 @@ export default function Schedule() {
     }
     setBuilderShifts(prev => [...prev, ...newShifts])
     setShowPatternModal(false)
-    alert(`Added ${newShifts.length} shifts for ${staffProfile.full_name}.`)
+    notify(`Added ${newShifts.length} shifts for ${staffProfile.full_name}.`, 'success')
   }
 
   const generateSchedule = async () => {
     if (!hasRole('manager')) {
-      alert('Only managers can generate schedules.')
+      notify('Only managers can generate schedules.', 'error')
       return
     }
     const confirmed = await confirmAction({
@@ -317,7 +315,7 @@ export default function Schedule() {
     }).filter(s => s.staff_name && s.start_time && s.end_time)
 
     if (shiftsToInsert.length === 0) {
-      alert('No valid shifts to insert.')
+      notify('No valid shifts to insert.', 'error')
       return
     }
 
@@ -337,7 +335,7 @@ export default function Schedule() {
     }
 
     if (builderConflicts.length > 0) {
-      alert(`Schedule conflicts found:\n\n${builderConflicts.slice(0, 5).join('\n')}${builderConflicts.length > 5 ? '\n...' : ''}`)
+      notify(`Schedule conflicts found: ${builderConflicts.slice(0, 5).join('; ')}${builderConflicts.length > 5 ? '; ...' : ''}`, 'error')
       return
     }
 
@@ -367,7 +365,7 @@ export default function Schedule() {
       notify(`Schedule generated with ${shiftsToInsert.length} shifts.`, 'success')
     } catch (err) {
       console.error('Error generating schedule:', err)
-      alert('Failed to generate schedule. Check console for details.')
+      notify('Failed to generate schedule.', 'error')
     }
   }
 
@@ -375,7 +373,7 @@ export default function Schedule() {
   const addShift = async (e) => {
     e.preventDefault()
     if (!user) {
-      alert('You must be logged in to add a shift.')
+      notify('You must be logged in to add a shift.', 'error')
       return
     }
 
@@ -383,7 +381,7 @@ export default function Schedule() {
     const staffName = selectedProfile?.full_name || selectedProfile?.email || newShift.name.trim()
 
     if (!staffName) {
-      alert('Choose or enter a staff name.')
+      notify('Choose or enter a staff name.', 'error')
       return
     }
 
@@ -396,7 +394,7 @@ export default function Schedule() {
     )
 
     if (hasConflict) {
-      alert('This staff member already has an overlapping shift on that day.')
+      notify('This staff member already has an overlapping shift on that day.', 'error')
       return
     }
 
@@ -433,7 +431,7 @@ export default function Schedule() {
       notify('Shift added.', 'success')
     } catch (err) {
       console.error('Error adding shift:', err)
-      alert('Failed to add shift to database.')
+      notify('Failed to add shift to database.', 'error')
     }
   }
 
@@ -458,7 +456,7 @@ export default function Schedule() {
       notify('Shift deleted.', 'success')
     } catch (err) {
       console.error('Error deleting shift:', err)
-      alert('Failed to delete shift from database.')
+      notify('Failed to delete shift from database.', 'error')
     }
   }
 
@@ -488,7 +486,7 @@ export default function Schedule() {
     if (!confirmed) return;
 
     if (!hasRole('manager')) {
-      alert('Only managers can clear shifts.');
+      notify('Only managers can clear shifts.', 'error');
       return;
     }
 
@@ -523,7 +521,7 @@ export default function Schedule() {
       notify(`Cleared all shifts and time off for ${months[currentMonth]} ${currentYear}.`, 'success');
     } catch (err) {
       console.error('Error clearing schedule:', err);
-      alert('Failed to clear schedule. Check console for details.');
+      notify('Failed to clear schedule.', 'error');
     }
   }
 
@@ -551,7 +549,7 @@ export default function Schedule() {
   const handleCopyWeek = async () => {
     const weekShifts = shifts.filter(s => s.month === currentMonth && s.year === currentYear)
     if (weekShifts.length === 0) {
-      alert('No shifts to copy from this month!')
+      notify('No shifts to copy from this month.', 'error')
       return
     }
 
@@ -577,7 +575,7 @@ export default function Schedule() {
     }
 
     if (shiftsToInsert.length === 0) {
-      alert('No valid shifts to copy (or all days exceed target month length).')
+      notify('No valid shifts to copy. Some days may exceed the target month length.', 'error')
       return
     }
 
@@ -600,7 +598,7 @@ export default function Schedule() {
     }
 
     if (conflicts.length > 0) {
-      alert(`Copy conflicts found:\n\n${conflicts.slice(0,5).join('\n')}${conflicts.length > 5 ? '\n...' : ''}`)
+      notify(`Copy conflicts found: ${conflicts.slice(0,5).join('; ')}${conflicts.length > 5 ? '; ...' : ''}`, 'error')
       return
     }
 
@@ -615,10 +613,10 @@ export default function Schedule() {
       // Refresh shifts from Supabase
       await fetchShifts()
       setShowCopyWeek(false)
-      alert(`Copied ${shiftsToInsert.length} shifts to ${months[targetMonth]} (saved to database).`)
+      notify(`Copied ${shiftsToInsert.length} shifts to ${months[targetMonth]}.`, 'success')
     } catch (err) {
       console.error('Error copying shifts:', err)
-      alert('Failed to copy shifts to database.')
+      notify('Failed to copy shifts to database.', 'error')
     }
   }
 
@@ -631,7 +629,7 @@ export default function Schedule() {
       const text = event.target.result;
       const lines = text.split('\n').filter(l => l.trim());
       if (lines.length < 2) {
-        alert('CSV file is empty or has no data rows.');
+        notify('CSV file is empty or has no data rows.', 'error');
         return;
       }
 
@@ -646,7 +644,7 @@ export default function Schedule() {
       const yearIdx = headers.findIndex(h => h.toLowerCase() === 'year');
 
       if (nameIdx === -1 || dayIdx === -1) {
-        alert('CSV must have at least "Name" and "Day" columns.');
+        notify('CSV must have at least "Name" and "Day" columns.', 'error');
         return;
       }
 
@@ -692,7 +690,7 @@ export default function Schedule() {
       }
 
       if (shiftsToInsert.length === 0) {
-        alert('No valid shifts found in CSV.');
+        notify('No valid shifts found in CSV.', 'error');
         return;
       }
 
@@ -707,10 +705,10 @@ export default function Schedule() {
 
         // Refresh shifts from Supabase
         await fetchShifts();
-        alert(`Successfully imported ${shiftsToInsert.length} shifts.`);
+        notify(`Successfully imported ${shiftsToInsert.length} shifts.`, 'success');
       } catch (err) {
         console.error('Error importing shifts:', err);
-        alert('Failed to import shifts. Check console for details.');
+        notify('Failed to import shifts.', 'error');
       }
     };
 
