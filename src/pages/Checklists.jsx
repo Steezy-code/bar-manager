@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { TABLES } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
+import { useNotifications } from '../components/Notifications'
 
 const defaultTasks = {
   opening: [{id:1,t:'Check walk-in temps',c:false},{id:2,t:'Count drawer cash',c:false},{id:3,t:'Stock condiments',c:false}],
@@ -14,6 +15,7 @@ const defaultTasks = {
 export default function Checklists() {
   const { user } = useAuth()
   const { hasRole } = usePermissions()
+  const { notify, confirmAction } = useNotifications()
   const canOverrideCompletion = hasRole('manager')
   const [list, setList] = useState('opening')
   const [tasks, setTasks] = useState(defaultTasks)
@@ -104,11 +106,11 @@ export default function Checklists() {
       }
     } catch (err) {
       console.error('Error fetching checklists:', err)
-      alert('Failed to load checklists from database.')
+      notify('Failed to load checklists from database.', 'error')
     } finally {
       setLoading(false)
     }
-  }, [user])
+  }, [user, notify])
 
   const fetchProfiles = useCallback(async () => {
     try {
@@ -137,7 +139,6 @@ export default function Checklists() {
         name: isTeam ? 'Team Checklists' : 'My Checklists',
         date: today
       }
-      console.log('Saving checklists:', { isTeam, updateData })
       let query = supabase
         .from(TABLES.CHECKLISTS)
         .update(updateData)
@@ -151,10 +152,9 @@ export default function Checklists() {
         console.error('Supabase save error:', error)
         throw error
       }
-      console.log('Checklist saved successfully')
     } catch (err) {
       console.error('Error saving checklists:', err)
-      alert('Failed to save checklists to database.')
+      notify('Failed to save checklists to database.', 'error')
     }
   }
 
@@ -170,7 +170,7 @@ export default function Checklists() {
     if (!task) return
 
     if (task.c && task.completed_by && task.completed_by !== user?.id && !canOverrideCompletion) {
-      alert('Only the person who completed this task or a manager can change it.')
+      notify('Only the person who completed this task or a manager can change it.', 'error')
       return
     }
 
@@ -180,7 +180,6 @@ export default function Checklists() {
         if (newCompleted) {
           const completed_by = user?.id || null
           const completed_at = new Date().toISOString()
-          console.log(`Task ${id} completed by ${completed_by} at ${completed_at}`)
           return {
             ...t,
             c: true,
@@ -189,13 +188,11 @@ export default function Checklists() {
           }
         } else {
           const { completed_by, completed_at, ...rest } = t
-          console.log(`Task ${id} marked incomplete`)
           return { ...rest, c: false }
         }
       }
       return t
     })}
-    console.log('Toggle -> saving updated tasks:', updated)
     save(updated)
   }
   const addT = () => { 
@@ -219,13 +216,19 @@ export default function Checklists() {
     setNewL('')
   }
 
-  const deleteList = (listKey) => {
-    if (confirm('Delete entire "' + listKey + '" list?')) {
-      const newTasks = {...tasks}
-      delete newTasks[listKey]
-      save(newTasks)
-      setList(Object.keys(newTasks)[0] || 'opening')
-    }
+  const deleteList = async (listKey) => {
+    const confirmed = await confirmAction({
+      title: 'Delete checklist?',
+      message: `Delete the entire "${listKey}" list?`,
+      confirmLabel: 'Delete',
+      danger: true
+    })
+    if (!confirmed) return
+
+    const newTasks = {...tasks}
+    delete newTasks[listKey]
+    save(newTasks)
+    setList(Object.keys(newTasks)[0] || 'opening')
   }
 
   const printChecklist = () => {
@@ -305,7 +308,7 @@ export default function Checklists() {
               onChange={e => setNewT(e.target.value)} 
               className="input flex-1" 
               placeholder="Add task..." 
-              onKeyPress={e => e.key === 'Enter' && addT()} 
+              onKeyDown={e => e.key === 'Enter' && addT()}
             />
             <button onClick={addT} className="btn-primary">
               <PlusIcon className="w-4 h-4"/>
