@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { PlusIcon, ExclamationTriangleIcon, TrashIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
+import { useState, useEffect, useCallback } from 'react'
+import { PlusIcon, ExclamationTriangleIcon, TrashIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
 import { supabase } from '../lib/supabase'
 import { TABLES } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -19,7 +19,6 @@ export default function Inventory() {
   const [search, setSearch] = useState('')
   const [showLowOnly, setShowLowOnly] = useState(false)
   const [loading, setLoading] = useState(true)
-  const fileInputRef = useRef(null)
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
@@ -147,69 +146,6 @@ export default function Inventory() {
     }
   }
 
-  const exportInventory = () => {
-    const data = JSON.stringify(items, null, 2)
-    const blob = new Blob([data], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `inventory-${new Date().toISOString().split('T')[0]}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const importInventory = (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-
-    const reader = new FileReader()
-    reader.onload = async (event) => {
-      try {
-        const imported = JSON.parse(event.target.result)
-        if (!Array.isArray(imported)) {
-          notify('Invalid file format.', 'error')
-          return
-        }
-
-        const confirmed = await confirmAction({
-          title: 'Replace inventory?',
-          message: `This will replace all ${items.length} inventory items with ${imported.length} items from the file.`,
-          confirmLabel: 'Replace',
-          danger: true
-        })
-        if (!confirmed) return
-
-        const { error: deleteError } = await supabase
-          .from(TABLES.INVENTORY)
-          .delete()
-          .neq('id', '00000000-0000-0000-0000-000000000000')
-        if (deleteError) throw deleteError
-
-        const itemsToInsert = imported.map(item => ({
-          name: item.name,
-          quantity: item.quantity,
-          unit: item.unit,
-          threshold: item.threshold,
-          user_id: user?.id || null,
-          role: profile?.role || 'staff'
-        }))
-        const { data, error: insertError } = await supabase
-          .from(TABLES.INVENTORY)
-          .insert(itemsToInsert)
-          .select('*')
-        if (insertError) throw insertError
-
-        setItems(data || [])
-        notify(`Replaced inventory with ${imported.length} items.`, 'success')
-      } catch (err) {
-        console.error('Import error:', err)
-        notify(`Failed to import inventory: ${err.message}`, 'error')
-      }
-    }
-    reader.readAsText(file)
-    fileInputRef.current.value = ''
-  }
-
   const lowItems = items.filter(i => Number(i.quantity || 0) <= Number(i.threshold || 5))
   const filteredItems = items.filter(item => {
     const haystack = `${item.name || ''} ${item.unit || ''}`.toLowerCase()
@@ -239,9 +175,6 @@ export default function Inventory() {
         </div>
         {hasRole('manager') && (
           <div className="flex flex-wrap gap-2">
-            <button onClick={exportInventory} className="btn-secondary text-sm"><ArrowDownTrayIcon className="w-4 h-4" /> Export</button>
-            <button onClick={() => fileInputRef.current.click()} className="btn-secondary text-sm"><ArrowUpTrayIcon className="w-4 h-4" /> Import</button>
-            <input type="file" accept=".json" ref={fileInputRef} onChange={importInventory} className="hidden" />
             <button onClick={() => setShowAdd(true)} className="btn-primary"><PlusIcon className="w-5 h-5" /> Add</button>
           </div>
         )}

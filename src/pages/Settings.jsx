@@ -3,126 +3,167 @@ import { supabase } from '../lib/supabase'
 import { TABLES } from '../lib/supabase'
 import { useNotifications } from '../components/Notifications'
 
+const RESTORE_SAFE_TABLES = [
+  { key: 'inventory', table: TABLES.INVENTORY, label: 'Inventory' },
+  { key: 'shifts', table: TABLES.SHIFTS, label: 'Shifts' },
+  { key: 'checklists', table: TABLES.CHECKLISTS, label: 'Checklists' },
+  { key: 'time_off', table: TABLES.TIME_OFF, label: 'Time Off' }
+]
+
+const REFERENCE_TABLES = [
+  { key: 'profiles', table: TABLES.PROFILES, label: 'Profiles' },
+  { key: 'roles', table: 'roles', label: 'Roles' },
+  { key: 'user_roles', table: 'user_roles', label: 'User Roles' },
+  { key: 'announcements', table: 'announcements', label: 'Announcements' }
+]
+
+const EMPTY_UUID = '00000000-0000-0000-0000-000000000000'
+
+const getBackupSection = (backup, key) => {
+  if (key === 'time_off') {
+    return [
+      ...(Array.isArray(backup.time_off) ? backup.time_off.map(row => ({ ...row, status: 'approved' })) : []),
+      ...(Array.isArray(backup.time_off_pending) ? backup.time_off_pending.map(row => ({ ...row, status: 'pending' })) : [])
+    ]
+  }
+  return Array.isArray(backup[key]) ? backup[key] : []
+}
+
+const hasRestoreSection = (backup, key) => {
+  if (key === 'time_off') {
+    return Array.isArray(backup.time_off) || Array.isArray(backup.time_off_pending)
+  }
+  return Array.isArray(backup[key])
+}
+
 export default function Settings() {
   const fileRef = useRef(null)
-  const [msg, setMsg] = useState('')
+  const [msg, setMsg] = useState(null)
   const { confirmAction } = useNotifications()
+
+  const showMsg = (text, type = 'success', timeout = 5000) => {
+    setMsg({ text, type })
+    setTimeout(() => setMsg(null), timeout)
+  }
+
+  const readTable = async ({ key, table, label }) => {
+    try {
+      const { data, error } = await supabase.from(table).select('*')
+      if (error) throw error
+      return { key, table, label, data: data || [], error: null }
+    } catch (err) {
+      console.warn(`Backup skipped ${label}:`, err)
+      return { key, table, label, data: [], error: err.message || 'Unable to read table' }
+    }
+  }
 
   const exportData = async () => {
     try {
-      // Fetch all data from Supabase tables
-      const [inventoryRes, shiftsRes, checklistsRes, timeOffRes] = await Promise.all([
-        supabase.from(TABLES.INVENTORY).select('*'),
-        supabase.from(TABLES.SHIFTS).select('*'),
-        supabase.from(TABLES.CHECKLISTS).select('*'),
-        supabase.from(TABLES.TIME_OFF).select('*')
-      ])
+      const restoreResults = await Promise.all(RESTORE_SAFE_TABLES.map(readTable))
+      const referenceResults = await Promise.all(REFERENCE_TABLES.map(readTable))
 
-      if (inventoryRes.error) throw inventoryRes.error
-      if (shiftsRes.error) throw shiftsRes.error
-      if (checklistsRes.error) throw checklistsRes.error
-      if (timeOffRes.error) throw timeOffRes.error
+      const byKey = Object.fromEntries(restoreResults.map(result => [result.key, result]))
+      const reference = Object.fromEntries(referenceResults.map(result => [result.key, result.data]))
+      const readErrors = [...restoreResults, ...referenceResults]
+        .filter(result => result.error)
+        .map(result => ({ key: result.key, table: result.table, label: result.label, error: result.error }))
 
+      const timeOffRows = byKey.time_off?.data || []
       const data = {
-        inventory: inventoryRes.data,
-        shifts: shiftsRes.data,
-        checklists: checklistsRes.data,
-        time_off: timeOffRes.data.filter(r => r.status === 'approved'),
-        time_off_pending: timeOffRes.data.filter(r => r.status === 'pending'),
+        version: '3.0',
         exportedAt: new Date().toISOString(),
-        version: '2.0'
+        manifest: {
+          app: 'BarManager',
+          restoreSafeTables: RESTORE_SAFE_TABLES.map(({ key, table, label }) => ({ key, table, label })),
+          referenceOnlyTables: REFERENCE_TABLES.map(({ key, table, label }) => ({ key, table, label })),
+          rowCounts: {
+            inventory: byKey.inventory?.data.length || 0,
+            shifts: byKey.shifts?.data.length || 0,
+            checklists: byKey.checklists?.data.length || 0,
+            time_off: timeOffRows.filter(row => row.status === 'approved').length,
+            time_off_pending: timeOffRows.filter(row => row.status === 'pending').length,
+            ...Object.fromEntries(referenceResults.map(result => [result.key, result.data.length]))
+          },
+          readErrors
+        },
+        inventory: byKey.inventory?.data || [],
+        shifts: byKey.shifts?.data || [],
+        checklists: byKey.checklists?.data || [],
+        time_off: timeOffRows.filter(row => row.status === 'approved'),
+        time_off_pending: timeOffRows.filter(row => row.status === 'pending'),
+        reference
       }
-      
+
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = `barmanager-full-export-${new Date().toISOString().split('T')[0]}.json`
       a.click()
-      
-      setMsg('✅ All data exported from Supabase (Inventory, Shifts, Checklists, Time Off)!')
-      setTimeout(() => setMsg(''), 4000)
+      URL.revokeObjectURL(url)
+
+      const restoredRows = RESTORE_SAFE_TABLES.reduce((sum, { key }) => sum + getBackupSection(data, key).length, 0)
+      const warning = readErrors.length ? ` ${readErrors.length} optional/read-limited table(s) were skipped.` : ''
+      showMsg(`Exported ${restoredRows} restore-safe rows.${warning}`, readErrors.length ? 'warning' : 'success', 7000)
     } catch (err) {
       console.error('Export error:', err)
-      setMsg('❌ Failed to export data')
-      setTimeout(() => setMsg(''), 3000)
+      showMsg('Failed to export data.', 'error')
     }
   }
 
   const importData = async (e) => {
     const file = e.target.files[0]
     if (!file) return
-    
+
     const reader = new FileReader()
     reader.onload = async (event) => {
       try {
         const data = JSON.parse(event.target.result)
-        let imported = 0
-        
-        // Validate version (1.0 = localStorage, 2.0 = Supabase)
-        const isV1 = data.version === '1.0'
-        const isV2 = data.version === '2.0'
-        
-        if (!isV1 && !isV2) {
-          alert('Unknown export version. Please use a file exported from this app.')
+        const supportedVersion = ['1.0', '2.0', '3.0'].includes(String(data.version))
+        const hasRestoreData = RESTORE_SAFE_TABLES.some(({ key }) => hasRestoreSection(data, key))
+
+        if (!supportedVersion || !hasRestoreData) {
+          showMsg('Unknown or empty backup file. No data was changed.', 'error')
           return
         }
+
+        const restoreCounts = Object.fromEntries(
+          RESTORE_SAFE_TABLES.map(({ key }) => [key, getBackupSection(data, key).length])
+        )
+        const totalRows = Object.values(restoreCounts).reduce((sum, count) => sum + count, 0)
+        const ignoredSections = ['reference', 'profiles', 'roles', 'user_roles', 'announcements']
+          .filter(key => data[key] || data.reference?.[key])
 
         const confirmed = await confirmAction({
-          title: 'Replace all app data?',
-          message: 'This will replace all data in the database with the imported file.',
-          confirmLabel: 'Replace',
+          title: 'Restore operational backup?',
+          message: `This will replace Inventory, Shifts, Checklists, and Time Off with ${totalRows} row(s) from this backup.${ignoredSections.length ? '\n\nReference-only sections will not be restored: ' + ignoredSections.join(', ') + '.' : ''}`,
+          confirmLabel: 'Restore',
           danger: true
         })
-        if (!confirmed) {
-          return
+        if (!confirmed) return
+
+        const clearResults = await Promise.all(RESTORE_SAFE_TABLES.map(({ table }) => (
+          supabase.from(table).delete().neq('id', EMPTY_UUID)
+        )))
+        const clearError = clearResults.find(result => result.error)?.error
+        if (clearError) throw clearError
+
+        let importedSections = 0
+        let importedRows = 0
+        for (const { key, table } of RESTORE_SAFE_TABLES) {
+          const rows = getBackupSection(data, key)
+          if (rows.length === 0) continue
+
+          const { error } = await supabase.from(table).insert(rows)
+          if (error) throw error
+          importedSections++
+          importedRows += rows.length
         }
 
-        // Clear existing data (delete all rows from each table)
-        // Note: This is a destructive operation. In a real app, you'd want to be more careful.
-        const clearPromises = [
-          supabase.from(TABLES.INVENTORY).delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-          supabase.from(TABLES.SHIFTS).delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-          supabase.from(TABLES.CHECKLISTS).delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-          supabase.from(TABLES.TIME_OFF).delete().neq('id', '00000000-0000-0000-0000-000000000000')
-        ]
-        await Promise.all(clearPromises)
-
-        // Insert new data
-        if (data.inventory && Array.isArray(data.inventory)) {
-          const { error } = await supabase.from(TABLES.INVENTORY).insert(data.inventory)
-          if (error) throw error
-          imported++
-        }
-        if (data.shifts && Array.isArray(data.shifts)) {
-          const { error } = await supabase.from(TABLES.SHIFTS).insert(data.shifts)
-          if (error) throw error
-          imported++
-        }
-        if (data.checklists && Array.isArray(data.checklists)) {
-          const { error } = await supabase.from(TABLES.CHECKLISTS).insert(data.checklists)
-          if (error) throw error
-          imported++
-        }
-        if (data.time_off && Array.isArray(data.time_off)) {
-          const timeOffWithStatus = data.time_off.map(r => ({ ...r, status: 'approved' }))
-          const { error } = await supabase.from(TABLES.TIME_OFF).insert(timeOffWithStatus)
-          if (error) throw error
-          imported++
-        }
-        if (data.time_off_pending && Array.isArray(data.time_off_pending)) {
-          const pendingWithStatus = data.time_off_pending.map(r => ({ ...r, status: 'pending' }))
-          const { error } = await supabase.from(TABLES.TIME_OFF).insert(pendingWithStatus)
-          if (error) throw error
-          imported++
-        }
-        
-        setMsg(`✅ Imported ${imported} sections! Refresh to see all data.`)
-        setTimeout(() => setMsg(''), 5000)
+        showMsg(`Restored ${importedRows} row(s) across ${importedSections} operational section(s). Refresh to see all data.`, 'success', 7000)
       } catch (err) {
         console.error('Import error:', err)
-        setMsg('❌ Failed to import data: ' + err.message)
-        setTimeout(() => setMsg(''), 3000)
+        showMsg(`Failed to import data: ${err.message}`, 'error', 7000)
       }
     }
     reader.readAsText(file)
@@ -132,31 +173,31 @@ export default function Settings() {
   return (
     <div className="space-y-6 pb-24 lg:pb-0">
       <h1 className="text-2xl font-bold">Settings</h1>
-      
+
       <div className="card">
-        <h2 className="text-lg font-bold mb-4">📤 Export All Data</h2>
+        <h2 className="text-lg font-bold mb-4">Export Full Backup</h2>
         <p className="text-gray-400 text-sm mb-4">
-          Downloads EVERYTHING from Supabase: Inventory, Shifts, Checklists, and Time Off
+          Downloads restore-safe operational data plus any readable reference snapshots.
         </p>
         <button onClick={exportData} className="btn-primary w-full">
-          📥 Export Full Data
+          Export Full Backup
         </button>
       </div>
 
       <div className="card">
-        <h2 className="text-lg font-bold mb-4">📥 Import Data</h2>
+        <h2 className="text-lg font-bold mb-4">Restore Operational Data</h2>
         <p className="text-gray-400 text-sm mb-4">
-          Upload a previously exported JSON file to replace all database data
+          Upload a BarManager backup to replace Inventory, Shifts, Checklists, and Time Off. Reference-only data is skipped.
         </p>
         <input type="file" accept=".json" ref={fileRef} onChange={importData} className="hidden" />
         <button onClick={() => fileRef.current.click()} className="btn-secondary w-full">
-          📤 Import Data
+          Import Backup
         </button>
       </div>
 
       {msg && (
-        <div className="card bg-green-500/20 border border-green-500">
-          <p className="text-green-400">{msg}</p>
+        <div className={`card border ${msg.type === 'error' ? 'border-red-500 bg-red-500/20' : msg.type === 'warning' ? 'border-yellow-500 bg-yellow-500/20' : 'border-green-500 bg-green-500/20'}`}>
+          <p className={msg.type === 'error' ? 'text-red-300' : msg.type === 'warning' ? 'text-yellow-200' : 'text-green-400'}>{msg.text}</p>
         </div>
       )}
     </div>
