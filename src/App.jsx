@@ -12,6 +12,7 @@ import SignUp from './pages/SignUp';
 import PendingApproval from './pages/PendingApproval';
 import Admin from './pages/Admin';
 import Layout from './components/Layout';
+import { NotificationsProvider } from './components/Notifications';
 
 // Protected wrapper that checks auth, approval status, and role hierarchy
 const ProtectedRoute = ({ children, requiredRole }) => {
@@ -91,7 +92,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRouter />
+        <NotificationsProvider>
+          <AppRouter />
+        </NotificationsProvider>
       </AuthProvider>
     </BrowserRouter>
   );

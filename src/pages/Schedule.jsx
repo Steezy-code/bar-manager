@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { PlusIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { supabase } from '../lib/supabase'
 import { TABLES } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
+import { useNotifications } from '../components/Notifications'
 
 // Format HH:MM to h:mm AM/PM
 const formatTime12 = (time24) => {
@@ -42,28 +43,26 @@ const getRoleColor = (role) => {
   }
 }
 
-const TIME_OFF_KEY = 'barmanager_timeoff'
-
 // Helper to convert day/month/year to Supabase date string (YYYY-MM-DD)
-// Helper to convert year, zero‑indexed month (0–11), day (1–31) to Supabase date string (YYYY‑MM‑DD)
+// Helper to convert year, zero-indexed month (0-11), day (1-31) to Supabase date string (YYYY-MM-DD)
 const formatDateForSupabase = (year, monthZeroIndexed, day) => {
-  const month = monthZeroIndexed + 1; // convert to 1‑indexed for date string
+  const month = monthZeroIndexed + 1; // convert to 1-indexed for date string
   const monthStr = month < 10 ? `0${month}` : month;
   const dayStr = day < 10 ? `0${day}` : day;
   return `${year}-${monthStr}-${dayStr}`;
 };
 
-// Helper to parse Supabase date string (YYYY‑MM‑DD) to { year, month (0–11), day (1–31) }
+// Helper to parse Supabase date string (YYYY-MM-DD) to { year, month (0-11), day (1-31) }
 const parseSupabaseDate = (dateStr) => {
   const [year, month, day] = dateStr.split('-').map(Number);
   return {
     year,
-    month: month - 1, // convert 1‑indexed month to zero‑indexed
+    month: month - 1, // convert 1-indexed month to zero-indexed
     day
   };
 }
 
-// Helper to convert weekday abbreviation (Sun, Mon, etc.) to day of month (1‑31) for given year/month
+// Helper to convert weekday abbreviation (Sun, Mon, etc.) to day of month (1-31) for given year/month
 // Returns the first occurrence of that weekday in the month
 const weekdayAbbrToDayOfMonth = (abbr, year, monthZeroIndexed) => {
   const dayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
@@ -77,7 +76,7 @@ const weekdayAbbrToDayOfMonth = (abbr, year, monthZeroIndexed) => {
   return 1; // fallback
 };
 
-// Parse day input (number or weekday abbreviation) to day of month (1‑31)
+// Parse day input (number or weekday abbreviation) to day of month (1-31)
 const parseDay = (dayRaw, year, monthZeroIndexed) => {
   if (!dayRaw) return 1;
   const num = parseInt(dayRaw, 10);
@@ -86,9 +85,12 @@ const parseDay = (dayRaw, year, monthZeroIndexed) => {
   return weekdayAbbrToDayOfMonth(dayRaw, year, monthZeroIndexed);
 };
 
+const normalizeName = (value) => String(value || '').trim().toLowerCase()
+
 export default function Schedule() {
-  const { user, profile } = useAuth()
+  const { user } = useAuth()
   const { hasRole } = usePermissions()
+  const { notify, confirmAction } = useNotifications()
   const [view, setView] = useState('month')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [shifts, setShifts] = useState([])
@@ -98,9 +100,13 @@ export default function Schedule() {
   const [showCopyWeek, setShowCopyWeek] = useState(false)
   const [showScheduleBuilder, setShowScheduleBuilder] = useState(false)
   const [builderShifts, setBuilderShifts] = useState([])
+  const [builderReview, setBuilderReview] = useState(null)
+  const [scheduleIssues, setScheduleIssues] = useState(null)
+  const [selectedDay, setSelectedDay] = useState(null)
   const [profilesList, setProfilesList] = useState([])
+  const [profilesUnavailable, setProfilesUnavailable] = useState(false)
   const [copyToMonth, setCopyToMonth] = useState(0)
-  const [newShift, setNewShift] = useState({ name: '', day: 1, start: '16:00', end: '23:00' })
+  const [newShift, setNewShift] = useState({ staffId: '', name: '', day: 1, start: '16:00', end: '23:00', role: 'server' })
   const [loading, setLoading] = useState(true)
   const csvRef = useRef(null)
   const [showPatternModal, setShowPatternModal] = useState(false)
@@ -109,7 +115,7 @@ export default function Schedule() {
     role: 'staff', 
     start: '16:00', 
     end: '23:00', 
-    days: [1, 2, 3, 4, 5] // Monday–Friday (0=Sunday)
+    days: [1, 2, 3, 4, 5] // Monday-Friday (0=Sunday)
   })
 
   const currentMonth = currentDate.getMonth()
@@ -139,11 +145,11 @@ export default function Schedule() {
       setShifts(mapped)
     } catch (err) {
       console.error('Error fetching shifts:', err)
-      alert('Failed to load schedule from database.')
+      notify('Failed to load schedule from database.', 'error')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [notify])
 
   const fetchTimeOff = useCallback(async () => {
     try {
@@ -155,21 +161,21 @@ export default function Schedule() {
       
       if (error) throw error
 
-      // Detect month indexing: if any month > 11, assume 1‑indexed (calendar months) and convert to zero‑indexed
+      // Detect month indexing: if any month > 11, assume 1-indexed (calendar months) and convert to zero-indexed
       const hasOneIndexed = data && data.some(to => to.month > 11);
       const mapped = (data || []).map(to => ({
         ...to,
         month: hasOneIndexed ? to.month - 1 : to.month
       }));
       if (hasOneIndexed) {
-        console.warn('Detected 1‑indexed months in time‑off requests; applying conversion. Run migration 20260408040000_fix_time_off_month_index.sql.');
+        console.warn('Detected 1-indexed months in time-off requests; applying conversion. Run migration 20260408040000_fix_time_off_month_index.sql.');
       }
       setTimeOff(mapped)
     } catch (err) {
       console.error('Error fetching time off:', err)
-      alert('Failed to load time off from database.')
+      notify('Failed to load time off from database.', 'error')
     }
-  }, [])
+  }, [notify])
 
   const fetchProfiles = useCallback(async () => {
     try {
@@ -180,9 +186,11 @@ export default function Schedule() {
         .order('full_name', { ascending: true })
       if (error) throw error
       setProfilesList(data || [])
+      setProfilesUnavailable(false)
     } catch (err) {
       console.error('Error fetching profiles:', err)
-      alert('Failed to load staff list.')
+      setProfilesList([])
+      setProfilesUnavailable(true)
     }
   }, [])
 
@@ -192,6 +200,107 @@ export default function Schedule() {
     fetchTimeOff()
     fetchProfiles()
   }, [fetchShifts, fetchTimeOff, fetchProfiles])
+
+  const getStaffNameFromProfile = (staffId, fallbackName = '') => {
+    const staffProfile = profilesList.find(p => p.id === staffId)
+    return staffProfile?.full_name || staffProfile?.email || fallbackName || 'Unknown'
+  }
+
+  const getStaffIdFromProfile = (staffId) => {
+    const staffProfile = profilesList.find(p => p.id === staffId)
+    return staffProfile?.id || user?.id
+  }
+
+  const getTimeOffForDate = (year, month, day) => {
+    return timeOff.filter(to => {
+      if (to.year !== year || to.month !== month || !to.days) return false
+      const requestedDays = String(to.days).split(',').map(d => parseInt(d.trim()))
+      return requestedDays.includes(day)
+    })
+  }
+
+  const toProposedShift = (shift, year = currentYear, month = currentMonth) => {
+    const date = formatDateForSupabase(year, month, Number(shift.day))
+    const staffName = getStaffNameFromProfile(shift.staffId, shift.name)
+    return {
+      staff_name: staffName,
+      date,
+      start_time: shift.start,
+      end_time: shift.end,
+      role: shift.role || 'staff',
+      user_id: getStaffIdFromProfile(shift.staffId)
+    }
+  }
+
+  const findExistingShiftConflicts = (proposedShifts, existingShifts = shifts) => {
+    const conflicts = []
+    proposedShifts.forEach(proposed => {
+      const { year, month, day } = parseSupabaseDate(proposed.date)
+      existingShifts.forEach(existing => {
+        if (
+          normalizeName(existing.name) === normalizeName(proposed.staff_name) &&
+          existing.year === year &&
+          existing.month === month &&
+          existing.day === day &&
+          shiftsOverlap(existing.start, existing.end, proposed.start_time, proposed.end_time)
+        ) {
+          conflicts.push({
+            name: proposed.staff_name,
+            date: proposed.date,
+            existing: `${formatTime12(existing.start)} - ${formatTime12(existing.end)}`,
+            proposed: `${formatTime12(proposed.start_time)} - ${formatTime12(proposed.end_time)}`
+          })
+        }
+      })
+    })
+    return conflicts
+  }
+
+  const findInternalShiftConflicts = (proposedShifts) => {
+    const conflicts = []
+    for (let i = 0; i < proposedShifts.length; i++) {
+      for (let j = i + 1; j < proposedShifts.length; j++) {
+        const left = proposedShifts[i]
+        const right = proposedShifts[j]
+        if (
+          normalizeName(left.staff_name) === normalizeName(right.staff_name) &&
+          left.date === right.date &&
+          shiftsOverlap(left.start_time, left.end_time, right.start_time, right.end_time)
+        ) {
+          conflicts.push({
+            name: left.staff_name,
+            date: left.date,
+            existing: `${formatTime12(left.start_time)} - ${formatTime12(left.end_time)}`,
+            proposed: `${formatTime12(right.start_time)} - ${formatTime12(right.end_time)}`
+          })
+        }
+      }
+    }
+    return conflicts
+  }
+
+  const findTimeOffWarnings = (proposedShifts) => {
+    const warnings = []
+    proposedShifts.forEach(proposed => {
+      const { year, month, day } = parseSupabaseDate(proposed.date)
+      const matchingTimeOff = getTimeOffForDate(year, month, day).filter(to =>
+        normalizeName(to.name || to.staff_name || to.full_name) === normalizeName(proposed.staff_name)
+      )
+      matchingTimeOff.forEach(to => {
+        warnings.push({
+          name: proposed.staff_name,
+          date: proposed.date,
+          shift: `${formatTime12(proposed.start_time)} - ${formatTime12(proposed.end_time)}`,
+          timeOff: to.dates || `${months[month]} ${day}, ${year}`
+        })
+      })
+    })
+    return warnings
+  }
+
+  const showBlockingIssues = (title, conflicts = [], warnings = []) => {
+    setScheduleIssues({ title, conflicts, warnings })
+  }
 
   // Schedule Builder Functions
   const loadExistingShifts = () => {
@@ -248,7 +357,7 @@ export default function Schedule() {
       }
     })
     setBuilderShifts(prev => [...prev, ...mapped])
-    alert(`Added ${mapped.length} shifts from ${months[prevMonth]} ${prevYear}.`)
+    notify(`Added ${mapped.length} shifts from ${months[prevMonth]} ${prevYear}.`, 'success')
   }
 
   const updatePatternShift = (field, value) => {
@@ -258,7 +367,7 @@ export default function Schedule() {
   const addPatternShifts = () => {
     const { staffId, role, start, end, days } = patternShift
     if (!staffId) {
-      alert('Please select a staff member.')
+      notify('Please select a staff member.', 'error')
       return
     }
     const staffProfile = profilesList.find(p => p.id === staffId)
@@ -283,80 +392,84 @@ export default function Schedule() {
     }
     setBuilderShifts(prev => [...prev, ...newShifts])
     setShowPatternModal(false)
-    alert(`Added ${newShifts.length} shifts for ${staffProfile.full_name}.`)
+    notify(`Added ${newShifts.length} shifts for ${staffProfile.full_name}.`, 'success')
   }
 
   const generateSchedule = async () => {
     if (!hasRole('manager')) {
-      alert('Only managers can generate schedules.')
+      notify('Only managers can generate schedules.', 'error')
       return
     }
-    if (!confirm(`Replace all shifts for ${months[currentMonth]} ${currentYear} with ${builderShifts.length} new shifts?`)) return
 
-    const shiftsToInsert = builderShifts.map(shift => {
-      const staffProfile = profilesList.find(p => p.id === shift.staffId)
-      return {
-        staff_name: staffProfile?.full_name || shift.name || 'Unknown',
-        date: formatDateForSupabase(currentYear, currentMonth, shift.day),
-        start_time: shift.start,
-        end_time: shift.end,
-        role: shift.role,
-        user_id: staffProfile?.id || user?.id
-      }
-    }).filter(s => s.staff_name && s.start_time && s.end_time)
+    const shiftsToInsert = builderShifts
+      .map(shift => toProposedShift(shift))
+      .filter(s => s.staff_name && s.start_time && s.end_time)
 
     if (shiftsToInsert.length === 0) {
-      alert('No valid shifts to insert.')
+      notify('No valid shifts to insert.', 'error')
       return
     }
 
-    const builderConflicts = []
-    for (let i = 0; i < shiftsToInsert.length; i++) {
-      for (let j = i + 1; j < shiftsToInsert.length; j++) {
-        const left = shiftsToInsert[i]
-        const right = shiftsToInsert[j]
-        if (
-          left.staff_name === right.staff_name &&
-          left.date === right.date &&
-          shiftsOverlap(left.start_time, left.end_time, right.start_time, right.end_time)
-        ) {
-          builderConflicts.push(`${left.staff_name} on ${left.date} (${left.start_time}-${left.end_time} overlaps ${right.start_time}-${right.end_time})`)
-        }
-      }
-    }
+    const builderConflicts = findInternalShiftConflicts(shiftsToInsert)
+    const timeOffWarnings = findTimeOffWarnings(shiftsToInsert)
 
     if (builderConflicts.length > 0) {
-      alert(`Schedule conflicts found:\n\n${builderConflicts.slice(0, 5).join('\n')}${builderConflicts.length > 5 ? '\n...' : ''}`)
+      showBlockingIssues('Schedule conflicts found', builderConflicts)
+      return
+    }
+
+    if (timeOffWarnings.length > 0) {
+      showBlockingIssues('Approved time off conflicts', [], timeOffWarnings)
       return
     }
 
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
     const startDate = formatDateForSupabase(currentYear, currentMonth, 1)
     const endDate = formatDateForSupabase(currentYear, currentMonth, daysInMonth)
+    const existingMonthShifts = shifts.filter(s => s.year === currentYear && s.month === currentMonth)
+
+    setBuilderReview({
+      monthLabel: `${months[currentMonth]} ${currentYear}`,
+      removeCount: existingMonthShifts.length,
+      addCount: shiftsToInsert.length,
+      startDate,
+      endDate,
+      shiftsToInsert
+    })
+  }
+
+  const commitGenerateSchedule = async () => {
+    if (!builderReview) return
+
+    const confirmed = await confirmAction({
+      title: 'Replace month schedule?',
+      message: `Replace ${builderReview.removeCount} existing shifts in ${builderReview.monthLabel} with ${builderReview.addCount} new shifts?`,
+      confirmLabel: 'Replace',
+      danger: true
+    })
+    if (!confirmed) return
 
     try {
-      // Delete existing shifts for the month
       const { error: deleteError } = await supabase
         .from(TABLES.SHIFTS)
         .delete()
-        .gte('date', startDate)
-        .lte('date', endDate)
+        .gte('date', builderReview.startDate)
+        .lte('date', builderReview.endDate)
       if (deleteError) throw deleteError
 
-      // Insert new shifts
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from(TABLES.SHIFTS)
-        .insert(shiftsToInsert)
+        .insert(builderReview.shiftsToInsert)
         .select('*')
       if (error) throw error
 
-      // Refresh UI
       await fetchShifts()
       setShowScheduleBuilder(false)
-      alert(`Schedule generated with ${shiftsToInsert.length} shifts.`)
+      setBuilderReview(null)
+      notify(`Schedule generated with ${builderReview.addCount} shifts.`, 'success')
     } catch (err) {
       console.error('Error generating schedule:', err)
-      alert('Failed to generate schedule. Check console for details.')
+      notify('Failed to generate schedule.', 'error')
     }
   }
 
@@ -364,37 +477,48 @@ export default function Schedule() {
   const addShift = async (e) => {
     e.preventDefault()
     if (!user) {
-      alert('You must be logged in to add a shift.')
+      notify('You must be logged in to add a shift.', 'error')
       return
     }
 
-    const hasConflict = shifts.some(existing =>
-      existing.name === newShift.name &&
-      existing.year === currentYear &&
-      existing.month === currentMonth &&
-      existing.day === Number(newShift.day) &&
-      shiftsOverlap(existing.start, existing.end, newShift.start, newShift.end)
-    )
+    const selectedProfile = profilesList.find(p => p.id === newShift.staffId)
+    const staffName = selectedProfile?.full_name || selectedProfile?.email || newShift.name.trim()
 
-    if (hasConflict) {
-      alert('This staff member already has an overlapping shift on that day.')
+    if (!staffName) {
+      notify('Choose or enter a staff name.', 'error')
       return
     }
 
-    const shiftDate = formatDateForSupabase(currentYear, currentMonth, newShift.day) // month already zero-indexed
-    const shiftToInsert = {
-      staff_name: newShift.name,
-      date: shiftDate,
+    const proposedShift = {
+      staff_name: staffName,
+      date: formatDateForSupabase(currentYear, currentMonth, newShift.day),
       start_time: newShift.start,
       end_time: newShift.end,
-      user_id: user.id, // optional for phase 1, but we have user
-      role: profile?.role || 'staff'
+      user_id: selectedProfile?.id || user.id,
+      role: newShift.role || 'server'
+    }
+    const conflicts = findExistingShiftConflicts([proposedShift])
+    const timeOffWarnings = findTimeOffWarnings([proposedShift])
+
+    if (conflicts.length > 0) {
+      showBlockingIssues('Shift conflict found', conflicts)
+      return
+    }
+
+    if (timeOffWarnings.length > 0) {
+      const confirmed = await confirmAction({
+        title: 'Time off warning',
+        message: `${staffName} has approved time off on this day. Add the shift anyway?`,
+        confirmLabel: 'Add Anyway',
+        danger: false
+      })
+      if (!confirmed) return
     }
 
     try {
       const { data, error } = await supabase
         .from(TABLES.SHIFTS)
-        .insert([shiftToInsert])
+        .insert([proposedShift])
         .select('*')
 
       if (error) throw error
@@ -410,16 +534,23 @@ export default function Schedule() {
       }
       setShifts(prev => [...prev, uiShift])
       setShowAddShift(false)
-      setNewShift({ name: '', day: 1, start: '16:00', end: '23:00' })
+      setNewShift({ staffId: '', name: '', day: 1, start: '16:00', end: '23:00', role: 'server' })
+      notify('Shift added.', 'success')
     } catch (err) {
       console.error('Error adding shift:', err)
-      alert('Failed to add shift to database.')
+      notify('Failed to add shift to database.', 'error')
     }
   }
 
   // Delete Shift from Supabase
   const deleteShift = async (id) => {
-    if (!confirm('Delete this shift?')) return
+    const confirmed = await confirmAction({
+      title: 'Delete shift?',
+      message: 'This shift will be removed from the schedule.',
+      confirmLabel: 'Delete',
+      danger: true
+    })
+    if (!confirmed) return
 
     try {
       const { error } = await supabase
@@ -429,9 +560,10 @@ export default function Schedule() {
       if (error) throw error
 
       setShifts(prev => prev.filter(s => s.id !== id))
+      notify('Shift deleted.', 'success')
     } catch (err) {
       console.error('Error deleting shift:', err)
-      alert('Failed to delete shift from database.')
+      notify('Failed to delete shift from database.', 'error')
     }
   }
 
@@ -452,10 +584,16 @@ export default function Schedule() {
   }
 
   const clearAll = async () => {
-    if (!confirm('Clear ALL shifts and time off? This cannot be undone!')) return;
+    const confirmed = await confirmAction({
+      title: 'Clear schedule?',
+      message: 'Clear all shifts and approved time off for this month? This cannot be undone.',
+      confirmLabel: 'Clear',
+      danger: true
+    })
+    if (!confirmed) return;
 
     if (!hasRole('manager')) {
-      alert('Only managers can clear shifts.');
+      notify('Only managers can clear shifts.', 'error');
       return;
     }
 
@@ -487,10 +625,10 @@ export default function Schedule() {
       await fetchShifts();
       await fetchTimeOff();
 
-      alert(`Cleared all shifts and time‑off for ${months[currentMonth]} ${currentYear}.`);
+      notify(`Cleared all shifts and time off for ${months[currentMonth]} ${currentYear}.`, 'success');
     } catch (err) {
       console.error('Error clearing schedule:', err);
-      alert('Failed to clear schedule. Check console for details.');
+      notify('Failed to clear schedule.', 'error');
     }
   }
 
@@ -515,10 +653,10 @@ export default function Schedule() {
     a.click();
   }
 
-  const handleCopyWeek = async () => {
-    const weekShifts = shifts.filter(s => s.month === currentMonth && s.year === currentYear)
-    if (weekShifts.length === 0) {
-      alert('No shifts to copy from this month!')
+  const handleCopyMonth = async () => {
+    const monthShifts = shifts.filter(s => s.month === currentMonth && s.year === currentYear)
+    if (monthShifts.length === 0) {
+      notify('No shifts to copy from this month.', 'error')
       return
     }
 
@@ -528,7 +666,7 @@ export default function Schedule() {
 
     // Build shifts to insert
     const shiftsToInsert = []
-    for (const shift of weekShifts) {
+    for (const shift of monthShifts) {
       if (shift.day > targetDaysInMonth) {
         // Skip shifts that would land on a nonexistent day in target month
         continue
@@ -544,35 +682,31 @@ export default function Schedule() {
     }
 
     if (shiftsToInsert.length === 0) {
-      alert('No valid shifts to copy (or all days exceed target month length).')
+      notify('No valid shifts to copy. Some days may exceed the target month length.', 'error')
       return
     }
 
-    // Conflict detection with existing shifts in target month
     const existingShiftsInTarget = shifts.filter(s => s.month === targetMonth && s.year === targetYear)
-    const conflicts = []
-    for (const newShift of shiftsToInsert) {
-      const { date, start_time, end_time, staff_name } = newShift
-      const { year, month, day } = parseSupabaseDate(date)
-      const hasConflict = existingShiftsInTarget.some(existing =>
-        existing.name === staff_name &&
-        existing.year === year &&
-        existing.month === month &&
-        existing.day === day &&
-        shiftsOverlap(existing.start, existing.end, start_time, end_time)
-      )
-      if (hasConflict) {
-        conflicts.push(`${staff_name} on ${date} (${start_time}-${end_time})`)
-      }
-    }
+    const conflicts = findExistingShiftConflicts(shiftsToInsert, existingShiftsInTarget)
+    const timeOffWarnings = findTimeOffWarnings(shiftsToInsert)
 
     if (conflicts.length > 0) {
-      alert(`Copy conflicts found:\n\n${conflicts.slice(0,5).join('\n')}${conflicts.length > 5 ? '\n...' : ''}`)
+      showBlockingIssues('Copy conflicts found', conflicts)
       return
+    }
+
+    if (timeOffWarnings.length > 0) {
+      const confirmed = await confirmAction({
+        title: 'Time off warnings',
+        message: `${timeOffWarnings.length} copied shifts land on approved time off. Copy them anyway?`,
+        confirmLabel: 'Copy Anyway',
+        danger: false
+      })
+      if (!confirmed) return
     }
 
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from(TABLES.SHIFTS)
         .insert(shiftsToInsert)
         .select('*')
@@ -582,10 +716,10 @@ export default function Schedule() {
       // Refresh shifts from Supabase
       await fetchShifts()
       setShowCopyWeek(false)
-      alert(`Copied ${shiftsToInsert.length} shifts to ${months[targetMonth]} (saved to database).`)
+      notify(`Copied ${shiftsToInsert.length} shifts to ${months[targetMonth]}.`, 'success')
     } catch (err) {
       console.error('Error copying shifts:', err)
-      alert('Failed to copy shifts to database.')
+      notify('Failed to copy shifts to database.', 'error')
     }
   }
 
@@ -598,7 +732,7 @@ export default function Schedule() {
       const text = event.target.result;
       const lines = text.split('\n').filter(l => l.trim());
       if (lines.length < 2) {
-        alert('CSV file is empty or has no data rows.');
+        notify('CSV file is empty or has no data rows.', 'error');
         return;
       }
 
@@ -613,12 +747,11 @@ export default function Schedule() {
       const yearIdx = headers.findIndex(h => h.toLowerCase() === 'year');
 
       if (nameIdx === -1 || dayIdx === -1) {
-        alert('CSV must have at least "Name" and "Day" columns.');
+        notify('CSV must have at least "Name" and "Day" columns.', 'error');
         return;
       }
 
       const shiftsToInsert = [];
-      const errors = [];
 
       for (let i = 1; i < lines.length; i++) {
         const parts = lines[i].split(',').map(p => p.trim());
@@ -628,7 +761,7 @@ export default function Schedule() {
         const dayRaw = parts[dayIdx] || '1';
         const start = parts[startIdx] || '16:00';
         const end = parts[endIdx] || '23:00';
-        const role = parts[roleIdx] || (profile?.role || 'staff');
+        const role = parts[roleIdx] || 'staff';
         let month = currentMonth;
         let year = currentYear;
 
@@ -659,13 +792,34 @@ export default function Schedule() {
       }
 
       if (shiftsToInsert.length === 0) {
-        alert('No valid shifts found in CSV.');
+        notify('No valid shifts found in CSV.', 'error');
         return;
+      }
+
+      const conflicts = [
+        ...findExistingShiftConflicts(shiftsToInsert),
+        ...findInternalShiftConflicts(shiftsToInsert)
+      ];
+      const timeOffWarnings = findTimeOffWarnings(shiftsToInsert);
+
+      if (conflicts.length > 0) {
+        showBlockingIssues('CSV import conflicts found', conflicts);
+        return;
+      }
+
+      if (timeOffWarnings.length > 0) {
+        const confirmed = await confirmAction({
+          title: 'Time off warnings',
+          message: `${timeOffWarnings.length} imported shifts land on approved time off. Import them anyway?`,
+          confirmLabel: 'Import Anyway',
+          danger: false
+        });
+        if (!confirmed) return;
       }
 
       try {
         // Batch insert into Supabase
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from(TABLES.SHIFTS)
           .insert(shiftsToInsert)
           .select('*');
@@ -674,10 +828,10 @@ export default function Schedule() {
 
         // Refresh shifts from Supabase
         await fetchShifts();
-        alert(`Successfully imported ${shiftsToInsert.length} shifts.`);
+        notify(`Successfully imported ${shiftsToInsert.length} shifts.`, 'success');
       } catch (err) {
         console.error('Error importing shifts:', err);
-        alert('Failed to import shifts. Check console for details.');
+        notify('Failed to import shifts.', 'error');
       }
     };
 
@@ -749,7 +903,7 @@ export default function Schedule() {
         days.push({ date: dayDate, shifts: dayShifts, timeOff: dayTimeOff })
       }
     } else {
-      // Month view – all days of the current month
+      // Month view - all days of the current month
       for (let i = 1; i <= daysInMonth; i++) {
         const year = currentYear
         const month = currentMonth
@@ -812,18 +966,10 @@ export default function Schedule() {
           <p className="text-sm text-gray-400">Manage shifts faster on smaller screens</p>
         </div>
         <div className="flex gap-2 flex-wrap print:hidden">
-          {hasRole('manager') && (
-            <>
-              <button onClick={() => csvRef.current.click()} className="btn-secondary text-sm">📥 Import</button>
-              <button onClick={exportCSV} className="btn-secondary text-sm">📤 Export</button>
-              <button onClick={clearAll} className="btn-secondary text-sm text-red-400">🗑️ Clear</button>
-              <button onClick={() => setShowScheduleBuilder(true)} className="btn-secondary text-sm">🏗️ Build Month</button>
-            </>
-          )}
-          <button onClick={printSchedule} className="btn-secondary text-sm">🖨️ Print</button>
-          <button onClick={refreshSchedule} className="btn-secondary text-sm">🔄 Refresh</button>
+          <button onClick={printSchedule} className="btn-secondary text-sm">Print</button>
+          <button onClick={refreshSchedule} className="btn-secondary text-sm">Refresh</button>
           <button onClick={() => setView(view === 'week' ? 'month' : 'week')} className="btn-primary">
-            {view === 'week' ? '📅 Month' : '📅 Week'}
+            {view === 'week' ? 'Month' : 'Week'}
           </button>
           {hasRole('manager') && (
             <button onClick={() => setShowAddShift(true)} className="btn-primary">
@@ -834,7 +980,24 @@ export default function Schedule() {
       </div>
       <input type="file" accept=".csv" ref={csvRef} onChange={importCSV} className="hidden" />
 
-      
+      {hasRole('manager') && (
+        <div className="bg-bar-card rounded-xl p-4 print:hidden">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Build schedule</h2>
+              <p className="text-sm text-gray-400">Add, copy, import, export, or replace shifts for the current schedule.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => setShowAddShift(true)} className="btn-primary text-sm">Add Shift</button>
+              <button onClick={() => setShowScheduleBuilder(true)} className="btn-secondary text-sm">Build Month</button>
+              <button onClick={() => setShowCopyWeek(true)} className="btn-secondary text-sm">Copy Month</button>
+              <button onClick={() => csvRef.current.click()} className="btn-secondary text-sm">Import CSV</button>
+              <button onClick={exportCSV} className="btn-secondary text-sm">Export CSV</button>
+              <button onClick={clearAll} className="btn-secondary text-sm text-red-400">Clear Month</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <button onClick={prevView} className="p-3 bg-bar-card rounded-lg hover:bg-bar-blue transition-colors"><ChevronLeftIcon className="w-5 h-5" /></button>
@@ -879,7 +1042,7 @@ export default function Schedule() {
 
       {view === 'week' ? (
         <div className="space-y-6">
-          {/* Day‑stacked list for week view */}
+          {/* Day-stacked list for week view */}
           {(() => {
             const days = getDaysToShow()
             const anyShiftsOrTimeOff = days.some(day => day.shifts.length > 0 || day.timeOff.length > 0)
@@ -902,7 +1065,7 @@ export default function Schedule() {
                         </div>
                         {isEmpty ? (
                           <div className="text-center py-6 text-gray-400">
-                            <div className="text-lg">📅 No shifts</div>
+                            <div className="text-lg">No shifts</div>
                             <p className="text-sm mt-1">Tap + to add a shift</p>
                           </div>
                         ) : (
@@ -931,7 +1094,7 @@ export default function Schedule() {
                                     )}
                                   </div>
                                   <div className="text-gray-400 text-sm mt-1">
-                                    {formatTime12(s.start)} – {formatTime12(s.end)}
+                                    {formatTime12(s.start)} - {formatTime12(s.end)}
                                   </div>
                                   {s.role && (
                                     <div className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-bar-dark text-gray-300">
@@ -949,7 +1112,7 @@ export default function Schedule() {
                                 key={to.id}
                                 className="bg-yellow-600/20 border-l-4 border-yellow-600 p-3 rounded-lg"
                               >
-                                <div className="font-semibold text-yellow-300">⛱️ OFF: {to.name}</div>
+                                <div className="font-semibold text-yellow-300">OFF: {to.name}</div>
                                 <div className="text-gray-300 text-sm">{to.dates}</div>
                               </div>
                             ))}
@@ -970,15 +1133,16 @@ export default function Schedule() {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Day‑stacked list (mobile: single column, desktop: multi‑column) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Month view: compact cards on mobile, calendar-style grid on desktop */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
             {getDaysToShow().map(({ date, shifts: dayShifts, timeOff: dayTimeOff }) => {
               const dayKey = date.toISOString().split('T')[0]
               const isEmpty = dayShifts.length === 0 && dayTimeOff.length === 0
               return (
                 <div
                   key={dayKey}
-                  className="bg-bar-card rounded-xl p-4 shadow-lg hover:shadow-xl transition-shadow"
+                  onClick={() => setSelectedDay({ date, shifts: dayShifts, timeOff: dayTimeOff })}
+                  className="bg-bar-card rounded-xl p-4 shadow-lg hover:shadow-xl transition-shadow cursor-pointer lg:min-h-[180px]"
                 >
                   <div className="flex justify-between items-center mb-3 pb-2 border-b border-bar-dark">
                     <h3 className="font-bold text-xl">{formatDayHeader(date)}</h3>
@@ -988,7 +1152,7 @@ export default function Schedule() {
                   </div>
                   {isEmpty ? (
                     <div className="text-center py-6 text-gray-400">
-                      <div className="text-lg">📅 No shifts</div>
+                      <div className="text-lg">No shifts</div>
                       <p className="text-sm mt-1">Tap + to add a shift</p>
                     </div>
                   ) : (
@@ -1009,7 +1173,10 @@ export default function Schedule() {
                               <div className="font-semibold">{s.name}</div>
                               {hasRole('manager') && (
                                 <button
-                                  onClick={() => deleteShift(s.id)}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    deleteShift(s.id)
+                                  }}
                                   className="text-red-500 hover:bg-red-500/20 p-1 rounded"
                                 >
                                   <TrashIcon className="w-4 h-4" />
@@ -1017,7 +1184,7 @@ export default function Schedule() {
                               )}
                             </div>
                             <div className="text-gray-400 text-sm mt-1">
-                              {formatTime12(s.start)} – {formatTime12(s.end)}
+                              {formatTime12(s.start)} - {formatTime12(s.end)}
                             </div>
                             {s.role && (
                               <div className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-bar-dark text-gray-300">
@@ -1035,7 +1202,7 @@ export default function Schedule() {
                           key={to.id}
                           className="bg-yellow-600/20 border-l-4 border-yellow-600 p-3 rounded-lg"
                         >
-                          <div className="font-semibold text-yellow-300">⛱️ OFF: {to.name}</div>
+                          <div className="font-semibold text-yellow-300">OFF: {to.name}</div>
                           <div className="text-gray-300 text-sm">{to.dates}</div>
                         </div>
                       ))}
@@ -1053,12 +1220,116 @@ export default function Schedule() {
         </div>
       )}
 
-      {/* Copy Week Modal */}
+      {selectedDay && (
+        <div className="fixed inset-0 bg-black/50 flex items-end justify-center p-0 md:hidden z-50">
+          <div className="bg-bar-card p-4 rounded-t-2xl w-full max-h-[75vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-xl font-bold">{formatDayHeader(selectedDay.date)}</h2>
+                <p className="text-sm text-gray-400">
+                  {selectedDay.shifts.length} shifts, {selectedDay.timeOff.length} time-off entries
+                </p>
+              </div>
+              <button onClick={() => setSelectedDay(null)} className="btn-secondary text-sm">Close</button>
+            </div>
+            <div className="space-y-3">
+              {selectedDay.shifts.length === 0 && selectedDay.timeOff.length === 0 && (
+                <div className="text-center py-6 text-gray-400">No shifts scheduled for this day.</div>
+              )}
+              {selectedDay.shifts.map(s => (
+                <div key={s.id} className={`p-3 rounded-lg border-l-4 ${getRoleColor(s.role)} border-opacity-80 bg-bar-blue/10`}>
+                  <div className="font-semibold">{s.name}</div>
+                  <div className="text-gray-400 text-sm mt-1">{formatTime12(s.start)} - {formatTime12(s.end)}</div>
+                  {s.role && <div className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-bar-dark text-gray-300">{s.role}</div>}
+                </div>
+              ))}
+              {selectedDay.timeOff.map(to => (
+                <div key={to.id} className="bg-yellow-600/20 border-l-4 border-yellow-600 p-3 rounded-lg">
+                  <div className="font-semibold text-yellow-300">OFF: {to.name}</div>
+                  <div className="text-gray-300 text-sm">{to.dates}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {scheduleIssues && (
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 z-50">
+          <div className="bg-bar-card p-4 md:p-6 rounded-t-2xl md:rounded-xl w-full max-w-full md:max-w-2xl mx-auto md:mx-0 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-xl font-bold">{scheduleIssues.title}</h2>
+                <p className="text-sm text-gray-400">Review these items before saving changes.</p>
+              </div>
+              <button onClick={() => setScheduleIssues(null)} className="btn-secondary text-sm">Close</button>
+            </div>
+            {scheduleIssues.conflicts?.length > 0 && (
+              <div className="mb-5">
+                <h3 className="font-semibold text-red-300 mb-2">Shift conflicts</h3>
+                <div className="space-y-2">
+                  {scheduleIssues.conflicts.map((item, index) => (
+                    <div key={`${item.name}-${item.date}-${index}`} className="rounded-lg border border-red-500/40 bg-red-500/10 p-3">
+                      <div className="font-semibold">{item.name}</div>
+                      <div className="text-sm text-gray-300">{item.date}</div>
+                      <div className="text-sm text-gray-400">Existing: {item.existing}</div>
+                      <div className="text-sm text-gray-400">Proposed: {item.proposed}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {scheduleIssues.warnings?.length > 0 && (
+              <div>
+                <h3 className="font-semibold text-yellow-300 mb-2">Approved time off</h3>
+                <div className="space-y-2">
+                  {scheduleIssues.warnings.map((item, index) => (
+                    <div key={`${item.name}-${item.date}-${index}`} className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3">
+                      <div className="font-semibold">{item.name}</div>
+                      <div className="text-sm text-gray-300">{item.date}</div>
+                      <div className="text-sm text-gray-400">Shift: {item.shift}</div>
+                      <div className="text-sm text-gray-400">Time off: {item.timeOff}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {builderReview && (
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 z-50">
+          <div className="bg-bar-card p-4 md:p-6 rounded-t-2xl md:rounded-xl w-full max-w-full md:max-w-lg mx-auto md:mx-0">
+            <h2 className="text-xl font-bold mb-2">Review month replacement</h2>
+            <p className="text-gray-400 mb-4">This will replace the schedule for {builderReview.monthLabel}.</p>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="rounded-lg bg-bar-blue/20 p-4">
+                <div className="text-2xl font-bold">{builderReview.removeCount}</div>
+                <div className="text-sm text-gray-400">Existing shifts removed</div>
+              </div>
+              <div className="rounded-lg bg-bar-blue/20 p-4">
+                <div className="text-2xl font-bold">{builderReview.addCount}</div>
+                <div className="text-sm text-gray-400">New shifts added</div>
+              </div>
+            </div>
+            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-100 mb-5">
+              This action is destructive for the selected month. The app will ask once more before replacing anything.
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setBuilderReview(null)} className="btn-secondary flex-1">Back</button>
+              <button onClick={commitGenerateSchedule} className="btn-primary flex-1">Continue</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Copy Month Modal */}
       {showCopyWeek && (
         <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 z-50">
           <div className="bg-bar-card p-4 md:p-6 rounded-t-2xl md:rounded-xl w-full max-w-full md:max-w-md mx-auto md:mx-0">
-            <h2 className="text-xl font-bold mb-4">📋 Copy Week to Another Month</h2>
-            <p className="text-gray-400 mb-4">Which month do you want to copy this week's schedule to?</p>
+            <h2 className="text-xl font-bold mb-4">Copy Month to Another Month</h2>
+            <p className="text-gray-400 mb-4">Which month do you want to copy this month's schedule to?</p>
             <select 
               className="input mb-4" 
               value={copyToMonth} 
@@ -1070,7 +1341,7 @@ export default function Schedule() {
             </select>
             <div className="flex gap-2">
               <button onClick={() => setShowCopyWeek(false)} className="btn-secondary flex-1">Cancel</button>
-              <button onClick={handleCopyWeek} className="btn-primary flex-1">Copy to {months[copyToMonth]}</button>
+              <button onClick={handleCopyMonth} className="btn-primary flex-1">Copy to {months[copyToMonth]}</button>
             </div>
           </div>
         </div>
@@ -1080,12 +1351,39 @@ export default function Schedule() {
         <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 z-50">
           <form onSubmit={addShift} className="bg-bar-card p-4 md:p-6 rounded-t-2xl md:rounded-xl w-full max-w-full md:max-w-md space-y-3 mx-auto md:mx-0">
             <h2 className="text-xl font-bold">Add Shift for {monthName}</h2>
-            <input placeholder="Staff name" className="input" value={newShift.name} onChange={e => setNewShift({...newShift, name: e.target.value})} required />
+            {profilesList.length > 0 ? (
+              <select
+                className="input"
+                value={newShift.staffId}
+                onChange={e => {
+                  const selected = profilesList.find(p => p.id === e.target.value)
+                  setNewShift({ ...newShift, staffId: e.target.value, name: selected?.full_name || '' })
+                }}
+                required
+              >
+                <option value="">Select staff...</option>
+                {profilesList.map(p => (
+                  <option key={p.id} value={p.id}>{p.full_name || p.email} ({p.role})</option>
+                ))}
+              </select>
+            ) : (
+              <input placeholder="Staff name" className="input" value={newShift.name} onChange={e => setNewShift({...newShift, name: e.target.value})} required />
+            )}
+            {profilesUnavailable && (
+              <p className="text-xs text-yellow-300">Staff list is unavailable, so you can still enter a name manually.</p>
+            )}
             <input type="number" min="1" max={daysInMonth} placeholder={`Day (1-${daysInMonth})`} className="input" value={newShift.day} onChange={e => setNewShift({...newShift, day: +e.target.value})} />
             <div className="flex gap-2">
               <input type="time" className="input" value={newShift.start} onChange={e => setNewShift({...newShift, start: e.target.value})} />
               <input type="time" className="input" value={newShift.end} onChange={e => setNewShift({...newShift, end: e.target.value})} />
             </div>
+            <select className="input" value={newShift.role} onChange={e => setNewShift({ ...newShift, role: e.target.value })}>
+              <option value="bartender">Bartender</option>
+              <option value="server">Server</option>
+              <option value="cook">Cook</option>
+              <option value="manager">Manager</option>
+              <option value="staff">Staff</option>
+            </select>
             <div className="flex gap-2">
               <button type="button" onClick={() => setShowAddShift(false)} className="btn-secondary flex-1">Cancel</button>
               <button className="btn-primary flex-1">Add Shift</button>
@@ -1097,21 +1395,21 @@ export default function Schedule() {
       {showScheduleBuilder && (
         <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 z-50">
           <div className="bg-bar-card p-4 md:p-6 rounded-t-2xl md:rounded-xl w-full max-w-full md:max-w-lg mx-auto md:mx-0 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">🏗️ Build Month Schedule</h2>
+            <h2 className="text-xl font-bold mb-4">Build Month Schedule</h2>
             <p className="text-gray-400 mb-4">Create shifts for {monthName}.</p>
             
             <div className="flex flex-wrap gap-2 mb-6">
-              <button onClick={loadExistingShifts} className="btn-secondary text-sm">📥 Load Existing Shifts</button>
-              <button onClick={addEmptyShift} className="btn-primary text-sm">➕ Add Shift</button>
-              <button onClick={() => setShowPatternModal(true)} className="btn-secondary text-sm">📅 Add Pattern</button>
-              <button onClick={copyLastMonth} className="btn-secondary text-sm">📋 Copy Last Month</button>
-              <button onClick={() => setBuilderShifts([])} className="btn-secondary text-sm text-red-400">🗑️ Clear All</button>
+              <button onClick={loadExistingShifts} className="btn-secondary text-sm">Load Existing Shifts</button>
+              <button onClick={addEmptyShift} className="btn-primary text-sm">Add Shift</button>
+              <button onClick={() => setShowPatternModal(true)} className="btn-secondary text-sm">Add Pattern</button>
+              <button onClick={copyLastMonth} className="btn-secondary text-sm">Copy Last Month</button>
+              <button onClick={() => setBuilderShifts([])} className="btn-secondary text-sm text-red-400">Clear All</button>
             </div>
             
             <div className="space-y-4 mb-6">
               {builderShifts.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">
-                  No shifts added yet. Click “Add Shift” to start.
+                  No shifts added yet. Click "Add Shift" to start.
                 </div>
               ) : (
                 builderShifts.map(shift => (
@@ -1141,16 +1439,25 @@ export default function Schedule() {
                       {/* Staff */}
                       <div>
                         <label className="block text-sm text-gray-400 mb-1">Staff</label>
-                        <select 
-                          className="input w-full" 
-                          value={shift.staffId} 
-                          onChange={e => updateShift(shift.id, 'staffId', e.target.value)}
-                        >
-                          <option value="">Select staff...</option>
-                          {profilesList.map(p => (
-                            <option key={p.id} value={p.id}>{p.full_name} ({p.role})</option>
-                          ))}
-                        </select>
+                        {profilesList.length > 0 ? (
+                          <select 
+                            className="input w-full" 
+                            value={shift.staffId} 
+                            onChange={e => updateShift(shift.id, 'staffId', e.target.value)}
+                          >
+                            <option value="">Select staff...</option>
+                            {profilesList.map(p => (
+                              <option key={p.id} value={p.id}>{p.full_name} ({p.role})</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            className="input w-full"
+                            value={shift.name}
+                            onChange={e => updateShift(shift.id, 'name', e.target.value)}
+                            placeholder="Staff name"
+                          />
+                        )}
                       </div>
                       
                       {/* Start Time */}
@@ -1207,7 +1514,7 @@ export default function Schedule() {
       {showPatternModal && (
         <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 z-50">
           <div className="bg-bar-card p-4 md:p-6 rounded-t-2xl md:rounded-xl w-full max-w-full md:max-w-md mx-auto md:mx-0 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">📅 Add Pattern Shifts</h2>
+            <h2 className="text-xl font-bold mb-4">Add Pattern Shifts</h2>
             <p className="text-gray-400 mb-4">Add shifts for a staff member across selected weekdays for the entire month.</p>
             
             <div className="space-y-4">
