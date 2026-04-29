@@ -71,16 +71,14 @@ export default function Admin() {
       return;
     }
 
-    console.log('Updating user:', editingId, { role: editRole, status: editStatus });
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from(TABLES.PROFILES)
       .update({ role: editRole, status: editStatus })
       .eq('id', editingId);
     if (error) {
       console.error('Failed to update user:', error);
-      alert('Failed to update user: ' + error.message + ' (details in console)');
+      notify(`Failed to update user: ${error.message}`, 'error');
     } else {
-      console.log('Updated successfully:', data);
       // Update local state
       setUsers(users.map(u => u.id === editingId ? { ...u, role: editRole, status: editStatus } : u));
       setEditingId(null);
@@ -124,16 +122,14 @@ export default function Admin() {
   };
 
   const approveUser = async (userId) => {
-    console.log('Approving user:', userId);
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from(TABLES.PROFILES)
       .update({ status: 'approved' })
       .eq('id', userId);
     if (error) {
       console.error('Failed to approve user:', error);
-      alert('Failed to approve user: ' + error.message + ' (details in console)');
+      notify(`Failed to approve user: ${error.message}`, 'error');
     } else {
-      console.log('Approved successfully:', data);
       setUsers(users.map(u => u.id === userId ? { ...u, status: 'approved' } : u));
       notify('User approved.', 'success');
     }
@@ -159,9 +155,9 @@ export default function Admin() {
     if (error) {
       console.error('Failed to remove user:', error);
       if (error.code === '23514') {
-        alert(`Cannot set status to 'removed': the database constraint needs updating.\n\nPlease run the migration:\n\n20260421040000_add_removed_status.sql\n\nin Supabase SQL Editor to allow the 'removed' status.`);
+        notify('Cannot set status to removed. The database constraint needs updating before this action can complete.', 'error');
       } else {
-        alert('Failed to remove user: ' + error.message);
+        notify(`Failed to remove user: ${error.message}`, 'error');
       }
     } else {
       setUsers(users.map(u => u.id === userId ? { ...u, status: 'removed' } : u));
