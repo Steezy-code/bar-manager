@@ -7,7 +7,7 @@ import { useNotifications } from '../components/Notifications';
 
 export default function Admin() {
   const { profile } = useAuth();
-  const { confirmAction } = useNotifications();
+  const { notify, confirmAction } = useNotifications();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
@@ -59,8 +59,18 @@ export default function Admin() {
     setEditingId(null);
   };
 
+  const activeAdmins = users.filter(u => u.role === 'admin' && u.status === 'approved');
+  const isLastActiveAdmin = (userId) => activeAdmins.length <= 1 && activeAdmins.some(u => u.id === userId);
+
   const saveEdit = async () => {
     if (!editingId) return;
+    const currentUser = users.find(u => u.id === editingId);
+    const wouldRemoveAdminAccess = currentUser?.role === 'admin' && (editRole !== 'admin' || editStatus !== 'approved');
+    if (wouldRemoveAdminAccess && isLastActiveAdmin(editingId)) {
+      notify('Cannot remove admin access from the last active admin.', 'error');
+      return;
+    }
+
     console.log('Updating user:', editingId, { role: editRole, status: editStatus });
     const { data, error } = await supabase
       .from(TABLES.PROFILES)
@@ -74,22 +84,16 @@ export default function Admin() {
       // Update local state
       setUsers(users.map(u => u.id === editingId ? { ...u, role: editRole, status: editStatus } : u));
       setEditingId(null);
+      notify('User updated.', 'success');
     }
   };
 
   const handleTransferAdmin = async () => {
     if (!transferTarget) {
-      alert('Please select a user to transfer admin role to.');
+      notify('Please select a user to grant admin access to.', 'error');
       return;
     }
-    // Ensure at least one admin remains if demoting self
-    if (demoteSelf) {
-      const adminCount = users.filter(u => u.role === 'admin' && u.id !== profile.id).length;
-      if (adminCount === 0) {
-        alert('Cannot demote yourself: there would be no remaining admin. Please ensure another admin exists.');
-        return;
-      }
-    }
+
     try {
       // Update target user to admin
       const { error: targetError } = await supabase
@@ -112,10 +116,10 @@ export default function Admin() {
       setShowTransferModal(false);
       setTransferTarget('');
       setDemoteSelf(false);
-      alert('Admin transfer successful.');
+      notify(demoteSelf ? 'Admin access granted and your role was changed to manager.' : 'Admin access granted.', 'success');
     } catch (err) {
-      console.error('Transfer failed:', err);
-      alert('Transfer failed: ' + err.message);
+      console.error('Grant admin failed:', err);
+      notify('Grant admin failed: ' + err.message, 'error');
     }
   };
 
@@ -131,10 +135,16 @@ export default function Admin() {
     } else {
       console.log('Approved successfully:', data);
       setUsers(users.map(u => u.id === userId ? { ...u, status: 'approved' } : u));
+      notify('User approved.', 'success');
     }
   };
 
   const removeUser = async (userId, userName) => {
+    if (isLastActiveAdmin(userId)) {
+      notify('Cannot remove the last active admin.', 'error');
+      return;
+    }
+
     const confirmed = await confirmAction({
       title: 'Remove user?',
       message: `Remove "${userName}"? They will no longer appear in the list but can be restored by an admin.`,
@@ -155,11 +165,12 @@ export default function Admin() {
       }
     } else {
       setUsers(users.map(u => u.id === userId ? { ...u, status: 'removed' } : u));
-      alert(`User "${userName}" removed.`);
+      notify(`User "${userName}" removed.`, 'success');
     }
   };
 
   const filteredUsers = users.filter(u => showRemoved || u.status !== 'removed');
+  const approvedNonRemovedUsers = users.filter(u => u.status === 'approved' && u.id !== profile.id);
 
   return (
     <div className="space-y-6">
@@ -167,8 +178,15 @@ export default function Admin() {
         <h1 className="text-2xl font-bold">User Management</h1>
         <div className="flex gap-2">
           <button onClick={fetchUsers} className="btn-secondary">Refresh</button>
-          <button onClick={() => setShowTransferModal(true)} className="btn-primary">Transfer Admin</button>
+          <button onClick={() => setShowTransferModal(true)} className="btn-primary">Grant Admin Access</button>
         </div>
+      </div>
+
+      <div className="card bg-bar-blue/30">
+        <div className="font-semibold">Active admins: {activeAdmins.length}</div>
+        <p className="mt-1 text-sm text-gray-300">
+          Multiple admins can exist at the same time. Grant admin access to another approved user so they can approve new accounts too.
+        </p>
       </div>
 
       <div className="flex items-center gap-2 mb-4">
@@ -238,7 +256,11 @@ export default function Admin() {
                           <button onClick={() => approveUser(user.id)} className="btn-primary py-1 px-3">Approve</button>
                         )}
                         {user.status !== 'removed' && user.id !== profile.id && (
-                          <button onClick={() => removeUser(user.id, user.email)} className="btn-secondary py-1 px-3 bg-red-500/20 text-red-300 hover:bg-red-500/30">
+                          <button
+                            onClick={() => removeUser(user.id, user.email)}
+                            className={`btn-secondary py-1 px-3 ${isLastActiveAdmin(user.id) ? 'opacity-50 cursor-not-allowed' : 'bg-red-500/20 text-red-300 hover:bg-red-500/30'}`}
+                            title={isLastActiveAdmin(user.id) ? 'Cannot remove the last active admin' : ''}
+                          >
                             <TrashIcon className="w-4 h-4" /> Remove
                           </button>
                         )}
@@ -257,8 +279,8 @@ export default function Admin() {
       {showTransferModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-bar-card p-6 rounded-xl w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Transfer Admin Role</h2>
-            <p className="text-gray-400 mb-4">Select a user to grant admin privileges.</p>
+            <h2 className="text-xl font-bold mb-4">Grant Admin Access</h2>
+            <p className="text-gray-400 mb-4">Select an approved user to grant admin privileges. Your admin access stays in place unless you choose to demote yourself.</p>
             
             <div className="space-y-4">
               <div>
@@ -269,8 +291,7 @@ export default function Admin() {
                   onChange={(e) => setTransferTarget(e.target.value)}
                 >
                   <option value="">Select a user...</option>
-                  {users
-                    .filter(u => u.status === 'approved' && u.id !== profile.id)
+                  {approvedNonRemovedUsers
                     .map(user => (
                       <option key={user.id} value={user.id}>
                         {user.email} ({user.role})
@@ -289,14 +310,14 @@ export default function Admin() {
                   className="rounded"
                 />
                 <label htmlFor="demoteSelf" className="text-sm text-gray-300">
-                  Demote myself to manager after transfer
+                  Demote myself to manager after granting access
                 </label>
               </div>
             </div>
             
             <div className="flex gap-2 mt-6">
               <button onClick={() => setShowTransferModal(false)} className="btn-secondary flex-1">Cancel</button>
-              <button onClick={handleTransferAdmin} className="btn-primary flex-1">Transfer Admin</button>
+              <button onClick={handleTransferAdmin} className="btn-primary flex-1">Grant Admin</button>
             </div>
           </div>
         </div>
