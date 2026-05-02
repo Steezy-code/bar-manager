@@ -279,18 +279,24 @@ If your Netlify project supports deploy previews:
 **Prerequisite:** Run the SQL migration `2026-04-07-update-tables-for-supabase-migration.sql` in Supabase SQL Editor.
 
 **Steps:**
-1. Log in as any user with role `staff` or higher.
+1. Log in as a user with role `manager` or `admin`.
 2. Navigate to **Inventory** page.
 3. Verify that existing inventory items load from Supabase (not localStorage).
 4. **Add** a new item using the "Add" button.
 5. **Update** quantity using +/- buttons.
 6. **Delete** an item using the trash icon.
-7. Refresh the page.
+7. Click **Template** and verify a CSV template downloads.
+8. Click **Export CSV** and verify the file includes `name,quantity,unit,threshold,category`.
+9. Import a CSV that contains one existing item name and one new item name.
+10. Review the preview, confirm import, and refresh the page.
+11. Log in as `staff` or `viewer` and verify Inventory is hidden from navigation and direct `/inventory` access redirects to Dashboard.
 
 **Expected:**
 - Items persist after refresh (data stored in Supabase `inventory_items` table).
 - Changes are reflected in the `inventory_items` table (check via Supabase SQL Editor).
 - Low stock alerts appear correctly.
+- Import updates matching names and adds new names without replacing all inventory.
+- Staff/viewer users cannot view or interact with Inventory in the app.
 
 **Verify in Supabase:**
 ```sql
