@@ -1,17 +1,97 @@
-import { useState, useEffect, useCallback } from 'react'
-import { PlusIcon, ExclamationTriangleIcon, TrashIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import {
+  ArrowDownTrayIcon,
+  ArrowUpTrayIcon,
+  DocumentArrowDownIcon,
+  ExclamationTriangleIcon,
+  PencilSquareIcon,
+  PlusIcon,
+  TrashIcon
+} from '@heroicons/react/24/outline'
 import { supabase } from '../lib/supabase'
 import { TABLES } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { useNotifications } from '../components/Notifications'
 
-const emptyItem = { name: '', quantity: 0, unit: '', threshold: 5 }
+const DEFAULT_CATEGORY = 'drinks'
+const CSV_HEADERS = ['name', 'quantity', 'unit', 'threshold', 'category']
+const emptyItem = { name: '', quantity: 0, unit: '', threshold: 5, category: DEFAULT_CATEGORY }
+
+const normalizeName = (value) => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase()
+
+const csvEscape = (value) => {
+  const text = String(value ?? '')
+  if (/[",\r\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`
+  }
+  return text
+}
+
+const downloadTextFile = (contents, filename, type = 'text/csv') => {
+  const blob = new Blob([contents], { type })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const parseCSV = (text) => {
+  const rows = []
+  let row = []
+  let field = ''
+  let inQuotes = false
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    const next = text[i + 1]
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        field += '"'
+        i++
+      } else {
+        inQuotes = !inQuotes
+      }
+    } else if (char === ',' && !inQuotes) {
+      row.push(field)
+      field = ''
+    } else if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (char === '\r' && next === '\n') i++
+      row.push(field)
+      if (row.some(value => String(value).trim() !== '')) rows.push(row)
+      row = []
+      field = ''
+    } else {
+      field += char
+    }
+  }
+
+  row.push(field)
+  if (row.some(value => String(value).trim() !== '')) rows.push(row)
+  return rows
+}
+
+const parseInventoryNumber = (value, fallback, label, rowNumber) => {
+  const raw = String(value ?? '').trim()
+  if (!raw) return { value: fallback, error: null }
+
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return { value: fallback, error: `Row ${rowNumber}: ${label} must be 0 or higher, or blank.` }
+  }
+
+  return { value: parsed, error: null }
+}
 
 export default function Inventory() {
+  const fileRef = useRef(null)
   const { user, profile } = useAuth()
   const { hasRole } = usePermissions()
   const { notify, confirmAction } = useNotifications()
+  const canManageInventory = hasRole('manager')
   const [items, setItems] = useState([])
   const [showAdd, setShowAdd] = useState(false)
   const [newItem, setNewItem] = useState(emptyItem)
@@ -19,10 +99,29 @@ export default function Inventory() {
   const [search, setSearch] = useState('')
   const [showLowOnly, setShowLowOnly] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [categorySupported, setCategorySupported] = useState(false)
+  const [importReport, setImportReport] = useState(null)
+
+  const detectCategorySupport = useCallback(async () => {
+    try {
+      const { error } = await supabase
+        .from(TABLES.INVENTORY)
+        .select('category')
+        .limit(1)
+
+      const supported = !error
+      setCategorySupported(supported)
+      return supported
+    } catch (err) {
+      setCategorySupported(false)
+      return false
+    }
+  }, [])
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
     try {
+      await detectCategorySupport()
       const { data, error } = await supabase
         .from(TABLES.INVENTORY)
         .select('*')
@@ -36,13 +135,15 @@ export default function Inventory() {
     } finally {
       setLoading(false)
     }
-  }, [notify])
+  }, [detectCategorySupport, notify])
 
   useEffect(() => {
     fetchItems()
   }, [fetchItems])
 
   const update = async (id, delta) => {
+    if (!canManageInventory) return
+
     const item = items.find(i => i.id === id)
     if (!item) return
 
@@ -62,6 +163,8 @@ export default function Inventory() {
   }
 
   const remove = async (id) => {
+    if (!canManageInventory) return
+
     const item = items.find(i => i.id === id)
     const confirmed = await confirmAction({
       title: 'Remove inventory item?',
@@ -88,6 +191,7 @@ export default function Inventory() {
 
   const add = async (e) => {
     e.preventDefault()
+    if (!canManageInventory) return
     if (!user) {
       notify('You must be logged in to add an item.', 'error')
       return
@@ -101,6 +205,7 @@ export default function Inventory() {
       user_id: user.id,
       role: profile?.role || 'staff'
     }
+    if (categorySupported) itemToInsert.category = newItem.category.trim() || DEFAULT_CATEGORY
 
     try {
       const { data, error } = await supabase
@@ -121,7 +226,7 @@ export default function Inventory() {
 
   const saveEdit = async (e) => {
     e.preventDefault()
-    if (!editingItem || !hasRole('manager')) return
+    if (!editingItem || !canManageInventory) return
 
     const updates = {
       name: editingItem.name.trim(),
@@ -129,6 +234,7 @@ export default function Inventory() {
       unit: editingItem.unit.trim(),
       threshold: Number(editingItem.threshold || 0)
     }
+    if (categorySupported) updates.category = editingItem.category?.trim() || DEFAULT_CATEGORY
 
     try {
       const { error } = await supabase
@@ -146,13 +252,224 @@ export default function Inventory() {
     }
   }
 
+  const exportCSV = () => {
+    if (!canManageInventory) return
+
+    const rows = items.map(item => (
+      CSV_HEADERS.map(header => {
+        if (header === 'category' && !categorySupported) return ''
+        return csvEscape(item[header] ?? '')
+      }).join(',')
+    ))
+
+    const csv = `${CSV_HEADERS.join(',')}\n${rows.join('\n')}`
+    downloadTextFile(csv, `inventory-export-${new Date().toISOString().slice(0, 10)}.csv`)
+    notify(`Exported ${items.length} inventory item(s).`, 'success')
+  }
+
+  const downloadTemplate = () => {
+    if (!canManageInventory) return
+    downloadTextFile(`${CSV_HEADERS.join(',')}\n`, 'inventory-import-template.csv')
+    notify('Inventory CSV template downloaded.', 'success')
+  }
+
+  const buildImportPreview = (text) => {
+    const rows = parseCSV(text)
+    if (rows.length < 2) {
+      return { errors: ['CSV file is empty or has no data rows.'], skipped: [], validRows: [], updates: [], additions: [] }
+    }
+
+    const headers = rows[0].map(header => String(header || '').trim().toLowerCase())
+    const indexes = Object.fromEntries(CSV_HEADERS.map(header => [header, headers.indexOf(header)]))
+    if (indexes.name === -1) {
+      return { errors: ['CSV must include a name column.'], skipped: [], validRows: [], updates: [], additions: [] }
+    }
+
+    const errors = []
+    const skipped = []
+    const seenNames = new Map()
+    const existingByName = new Map(items.map(item => [normalizeName(item.name), item]))
+    const validRows = []
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i]
+      const rowNumber = i + 1
+      const getValue = (key) => indexes[key] === -1 ? '' : row[indexes[key]]
+      const hasAnyValue = row.some(value => String(value || '').trim() !== '')
+      if (!hasAnyValue) continue
+
+      const name = String(getValue('name') || '').trim()
+      if (!name) {
+        skipped.push(`Row ${rowNumber}: missing name.`)
+        continue
+      }
+
+      const normalizedName = normalizeName(name)
+      if (seenNames.has(normalizedName)) {
+        errors.push(`Rows ${seenNames.get(normalizedName)} and ${rowNumber}: duplicate item name "${name}".`)
+        continue
+      }
+      seenNames.set(normalizedName, rowNumber)
+
+      const quantityResult = parseInventoryNumber(getValue('quantity'), 0, 'quantity', rowNumber)
+      const thresholdResult = parseInventoryNumber(getValue('threshold'), 5, 'threshold', rowNumber)
+      if (quantityResult.error) errors.push(quantityResult.error)
+      if (thresholdResult.error) errors.push(thresholdResult.error)
+      if (quantityResult.error || thresholdResult.error) continue
+
+      const parsedRow = {
+        rowNumber,
+        name,
+        normalizedName,
+        quantity: quantityResult.value,
+        unit: String(getValue('unit') || '').trim(),
+        threshold: thresholdResult.value,
+        category: String(getValue('category') || '').trim() || DEFAULT_CATEGORY,
+        existingItem: existingByName.get(normalizedName) || null
+      }
+      validRows.push(parsedRow)
+    }
+
+    return {
+      errors,
+      skipped,
+      validRows,
+      updates: validRows.filter(row => row.existingItem),
+      additions: validRows.filter(row => !row.existingItem)
+    }
+  }
+
+  const applyImportPreview = async (preview) => {
+    const updates = preview.updates.map(row => {
+      const changes = {
+        name: row.name,
+        quantity: row.quantity,
+        unit: row.unit,
+        threshold: row.threshold
+      }
+      if (categorySupported) changes.category = row.category
+
+      return supabase
+        .from(TABLES.INVENTORY)
+        .update(changes)
+        .eq('id', row.existingItem.id)
+    })
+
+    const additions = preview.additions.map(row => {
+      const itemToInsert = {
+        name: row.name,
+        quantity: row.quantity,
+        unit: row.unit,
+        threshold: row.threshold,
+        user_id: user?.id,
+        role: profile?.role || 'staff'
+      }
+      if (categorySupported) itemToInsert.category = row.category
+      return itemToInsert
+    })
+
+    const updateResults = await Promise.all(updates)
+    const updateError = updateResults.find(result => result.error)?.error
+    if (updateError) throw updateError
+
+    if (additions.length > 0) {
+      const { error } = await supabase
+        .from(TABLES.INVENTORY)
+        .insert(additions)
+      if (error) throw error
+    }
+
+    await fetchItems()
+  }
+
+  const importCSV = async (e) => {
+    const file = e.target.files[0]
+    if (!file || !canManageInventory) return
+
+    const reader = new FileReader()
+    reader.onload = async (event) => {
+      try {
+        const preview = buildImportPreview(event.target.result)
+        if (preview.errors.length > 0) {
+          setImportReport({
+            type: 'error',
+            title: 'CSV import needs fixes',
+            lines: preview.errors.slice(0, 8)
+          })
+          notify('CSV import has errors. No inventory was changed.', 'error')
+          return
+        }
+
+        if (preview.validRows.length === 0) {
+          setImportReport({
+            type: 'error',
+            title: 'No importable rows found',
+            lines: preview.skipped.length ? preview.skipped.slice(0, 8) : ['Add at least one row with an item name.']
+          })
+          notify('No importable inventory rows found.', 'error')
+          return
+        }
+
+        const categoryNote = categorySupported
+          ? ''
+          : '\n\nCategory is included in the CSV, but this database does not expose a category column. Category values will be ignored.'
+        const skippedNote = preview.skipped.length
+          ? `\n\nSkipped row(s):\n${preview.skipped.slice(0, 5).join('\n')}${preview.skipped.length > 5 ? `\n...and ${preview.skipped.length - 5} more.` : ''}`
+          : ''
+
+        const confirmed = await confirmAction({
+          title: 'Import inventory CSV?',
+          message: `${preview.updates.length} item(s) will be updated.\n${preview.additions.length} item(s) will be added.${skippedNote}${categoryNote}`,
+          confirmLabel: 'Import',
+          danger: false
+        })
+        if (!confirmed) return
+
+        await applyImportPreview(preview)
+        setImportReport({
+          type: 'success',
+          title: 'CSV import complete',
+          lines: [
+            `${preview.updates.length} item(s) updated.`,
+            `${preview.additions.length} item(s) added.`,
+            `${preview.skipped.length} row(s) skipped.`,
+            ...(categorySupported ? [] : ['Category values were ignored because this database does not expose a category column.'])
+          ]
+        })
+        notify('Inventory CSV imported.', 'success')
+      } catch (err) {
+        console.error('Inventory CSV import error:', err)
+        setImportReport({
+          type: 'error',
+          title: 'CSV import failed',
+          lines: [err.message || 'The inventory import could not be completed.']
+        })
+        notify('Failed to import inventory CSV.', 'error')
+      }
+    }
+
+    reader.readAsText(file)
+    fileRef.current.value = ''
+  }
+
   const lowItems = items.filter(i => Number(i.quantity || 0) <= Number(i.threshold || 5))
   const filteredItems = items.filter(item => {
-    const haystack = `${item.name || ''} ${item.unit || ''}`.toLowerCase()
+    const haystack = `${item.name || ''} ${item.unit || ''} ${item.category || ''}`.toLowerCase()
     const matchesSearch = haystack.includes(search.trim().toLowerCase())
     const matchesLow = !showLowOnly || Number(item.quantity || 0) <= Number(item.threshold || 5)
     return matchesSearch && matchesLow
   })
+
+  if (!canManageInventory) {
+    return (
+      <div className="space-y-6 pb-24 lg:pb-0">
+        <div>
+          <h1 className="text-2xl font-bold">Inventory</h1>
+          <p className="text-gray-400">Only managers and admins can access inventory.</p>
+        </div>
+      </div>
+    )
+  }
 
   if (loading) {
     return (
@@ -173,12 +490,35 @@ export default function Inventory() {
           <h1 className="text-2xl font-bold">Inventory</h1>
           <p className="text-gray-400">{items.length} items</p>
         </div>
-        {hasRole('manager') && (
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => setShowAdd(true)} className="btn-primary"><PlusIcon className="w-5 h-5" /> Add</button>
-          </div>
-        )}
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => setShowAdd(true)} className="btn-primary"><PlusIcon className="w-5 h-5" /> Add</button>
+          <button onClick={() => fileRef.current.click()} className="btn-secondary"><ArrowUpTrayIcon className="w-5 h-5" /> Import CSV</button>
+          <button onClick={exportCSV} className="btn-secondary"><ArrowDownTrayIcon className="w-5 h-5" /> Export CSV</button>
+          <button onClick={downloadTemplate} className="btn-secondary"><DocumentArrowDownIcon className="w-5 h-5" /> Template</button>
+        </div>
       </div>
+
+      <input type="file" accept=".csv,text/csv" ref={fileRef} onChange={importCSV} className="hidden" />
+
+      {!categorySupported && (
+        <div className="card border-yellow-500 bg-yellow-500/10 text-sm text-yellow-100">
+          Category can be included in CSV files, but this database does not expose a category column. Imports and exports will continue without changing category values.
+        </div>
+      )}
+
+      {importReport && (
+        <div className={`card border ${importReport.type === 'error' ? 'border-red-500 bg-red-500/20' : 'border-green-500 bg-green-500/20'}`}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className={importReport.type === 'error' ? 'font-bold text-red-300' : 'font-bold text-green-300'}>{importReport.title}</h2>
+              <ul className="mt-2 space-y-1 text-sm text-gray-200">
+                {importReport.lines.map((line, index) => <li key={`${line}-${index}`}>{line}</li>)}
+              </ul>
+            </div>
+            <button type="button" onClick={() => setImportReport(null)} className="rounded px-2 py-1 text-gray-300 hover:bg-bar-blue hover:text-white">x</button>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
@@ -222,31 +562,24 @@ export default function Inventory() {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <h3 className="font-semibold">{i.name}</h3>
+                  {categorySupported && i.category && <p className="text-xs text-gray-400">{i.category}</p>}
                   {isLow && <p className="text-xs text-red-400">Low stock (min: {i.threshold})</p>}
                 </div>
-                {hasRole('manager') && (
-                  <div className="flex gap-1">
-                    <button onClick={() => setEditingItem(i)} className="rounded p-1 text-gray-300 hover:bg-bar-blue hover:text-white" aria-label={`Edit ${i.name}`}>
-                      <PencilSquareIcon className="h-4 w-4" />
-                    </button>
-                    <button onClick={() => remove(i.id)} className="rounded p-1 text-red-500 hover:bg-red-500/20" aria-label={`Remove ${i.name}`}>
-                      <TrashIcon className="h-4 w-4" />
-                    </button>
-                  </div>
-                )}
+                <div className="flex gap-1">
+                  <button onClick={() => setEditingItem({ ...i, category: i.category || DEFAULT_CATEGORY })} className="rounded p-1 text-gray-300 hover:bg-bar-blue hover:text-white" aria-label={`Edit ${i.name}`}>
+                    <PencilSquareIcon className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => remove(i.id)} className="rounded p-1 text-red-500 hover:bg-red-500/20" aria-label={`Remove ${i.name}`}>
+                    <TrashIcon className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-              {hasRole('staff') ? (
-                <div className="mt-3 flex items-center">
-                  <button onClick={() => update(i.id, -1)} className="h-9 w-9 rounded bg-bar-blue text-lg">-</button>
-                  <span className="mx-3 font-bold">{i.quantity}</span>
-                  <button onClick={() => update(i.id, 1)} className="h-9 w-9 rounded bg-bar-blue text-lg">+</button>
-                  <span className="ml-2 text-sm text-gray-400">{i.unit}</span>
-                </div>
-              ) : (
-                <div className="mt-2">
-                  <span className="font-bold">{i.quantity}</span> <span className="text-sm text-gray-400">{i.unit}</span>
-                </div>
-              )}
+              <div className="mt-3 flex items-center">
+                <button onClick={() => update(i.id, -1)} className="h-9 w-9 rounded bg-bar-blue text-lg">-</button>
+                <span className="mx-3 font-bold">{i.quantity}</span>
+                <button onClick={() => update(i.id, 1)} className="h-9 w-9 rounded bg-bar-blue text-lg">+</button>
+                <span className="ml-2 text-sm text-gray-400">{i.unit}</span>
+              </div>
             </div>
           )
         })}
@@ -261,6 +594,9 @@ export default function Inventory() {
           <form onSubmit={add} className="w-full max-w-md space-y-3 rounded-xl bg-bar-card p-6">
             <h2 className="text-xl font-bold">Add Item</h2>
             <input placeholder="Name" className="input" value={newItem.name} onChange={e => setNewItem({ ...newItem, name: e.target.value })} required />
+            {categorySupported && (
+              <input placeholder="Category" className="input" value={newItem.category} onChange={e => setNewItem({ ...newItem, category: e.target.value })} />
+            )}
             <div className="grid grid-cols-2 gap-2">
               <input type="number" min="0" placeholder="Qty" className="input" value={newItem.quantity} onChange={e => setNewItem({ ...newItem, quantity: e.target.value })} required />
               <input placeholder="Unit" className="input" value={newItem.unit} onChange={e => setNewItem({ ...newItem, unit: e.target.value })} required />
@@ -282,6 +618,9 @@ export default function Inventory() {
           <form onSubmit={saveEdit} className="w-full max-w-md space-y-3 rounded-xl bg-bar-card p-6">
             <h2 className="text-xl font-bold">Edit Item</h2>
             <input placeholder="Name" className="input" value={editingItem.name} onChange={e => setEditingItem({ ...editingItem, name: e.target.value })} required />
+            {categorySupported && (
+              <input placeholder="Category" className="input" value={editingItem.category || DEFAULT_CATEGORY} onChange={e => setEditingItem({ ...editingItem, category: e.target.value })} />
+            )}
             <div className="grid grid-cols-2 gap-2">
               <input type="number" min="0" placeholder="Qty" className="input" value={editingItem.quantity} onChange={e => setEditingItem({ ...editingItem, quantity: e.target.value })} required />
               <input placeholder="Unit" className="input" value={editingItem.unit || ''} onChange={e => setEditingItem({ ...editingItem, unit: e.target.value })} required />

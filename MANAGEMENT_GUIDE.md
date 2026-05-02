@@ -45,8 +45,38 @@ BarManager is your all-in-one management hub for running your bar/restaurant. Th
 ### 📦 Inventory
 - **Add items:** Click "Add Item" → fill in name, category, quantity, threshold
 - **Update quantities:** Just click the number and type the new amount
-- **Export/Import:** Share inventory counts with staff or back up
+- **Export/Import:** Managers/admins can export inventory to CSV, download a template, and import CSV updates
 - **Low stock alerts:** Items turn red when below threshold
+
+#### Inventory CSV How-To
+Use these exact CSV headers:
+
+```csv
+name,quantity,unit,threshold,category
+```
+
+Example:
+
+```csv
+name,quantity,unit,threshold,category
+Vodka,8,bottles,3,drinks
+Limes,24,each,12,garnish
+Cocktail Napkins,6,packs,2,supplies
+```
+
+To import: go to **Inventory** → **Template**, fill in the file, then choose **Import CSV**. BarManager previews how many items will be updated or added before anything changes.
+
+To convert a paper sheet: take a clear photo, upload it to ChatGPT, and ask:
+
+```text
+Please read this inventory sheet and convert it into CSV with exactly these headers:
+name,quantity,unit,threshold,category
+
+Do not add extra columns. Do not guess unreadable values. Leave unknown values blank.
+Use numbers only for quantity and threshold. Return only the CSV.
+```
+
+Review the CSV before importing. If this Supabase table does not have a category column, BarManager ignores category values but still imports the rest.
 
 ### 📅 Schedule
 - **Add shifts:** Click "Add Shift" → pick employee, date, start/end time

@@ -63,6 +63,51 @@ The dashboard is your home screen. It shows:
 3. Update quantities after each delivery or shift.
 4. Use the dashboard to see what’s running low before you order.
 
+### CSV Import/Export for Managers
+
+Inventory is available only to managers and admins in the app.
+
+**CSV columns:** `name,quantity,unit,threshold,category`
+
+Example:
+```csv
+name,quantity,unit,threshold,category
+Vodka,8,bottles,3,drinks
+Limes,24,each,12,garnish
+Cocktail Napkins,6,packs,2,supplies
+```
+
+**Export current inventory**
+1. Go to **Inventory**.
+2. Click **Export CSV**.
+3. Save the downloaded file with your other inventory records.
+
+**Import inventory from CSV**
+1. Go to **Inventory**.
+2. Click **Template** to download a blank CSV with the correct headers.
+3. Fill in the rows in a spreadsheet app.
+4. Click **Import CSV** and choose the file.
+5. Review the preview carefully. Existing items with the same name will be updated; new names will be added.
+6. Click **Import** to confirm.
+
+**Turn a paper inventory sheet into CSV with ChatGPT**
+1. Take a clear, well-lit picture of the paper inventory sheet.
+2. Upload the picture to ChatGPT.
+3. Use this prompt:
+
+```text
+Please read this inventory sheet and convert it into CSV with exactly these headers:
+name,quantity,unit,threshold,category
+
+Do not add extra columns. Do not guess unreadable values. Leave unknown values blank.
+Use numbers only for quantity and threshold. Return only the CSV.
+```
+
+4. Review the CSV that ChatGPT returns.
+5. Save it as a `.csv` file, then import it in BarManager.
+
+If your database does not expose a category field, BarManager will still import the CSV and ignore category values.
+
 ---
 
 ## 📅 Schedule Management
