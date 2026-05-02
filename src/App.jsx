@@ -71,7 +71,11 @@ const AppRouter = () => {
         </ProtectedRoute>
       }>
         <Route index element={<Dashboard />} />
-        <Route path="inventory" element={<Inventory />} />
+        <Route path="inventory" element={
+          <ProtectedRoute requiredRole="manager">
+            <Inventory />
+          </ProtectedRoute>
+        } />
         <Route path="schedule" element={<Schedule />} />
         <Route path="checklists" element={<Checklists />} />
         <Route path="timeoff" element={<TimeOff />} />

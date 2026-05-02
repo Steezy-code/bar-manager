@@ -28,6 +28,9 @@ export default function Layout({ user, onLogout }) {
 
   // Filter nav items based on role
   const filteredNavItems = navItems.filter(item => {
+    if (item.path === '/inventory') {
+      return hasRole('manager') // manager or admin
+    }
     if (item.path === '/settings') {
       return hasRole('manager') // manager or admin
     }

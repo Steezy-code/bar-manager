@@ -40,6 +40,7 @@ const countTasks = (tasks = {}) => {
 export default function Dashboard() {
   const { hasRole } = usePermissions()
   const canReviewRequests = hasRole('manager')
+  const canManageInventory = hasRole('manager')
   const [lowItems, setLowItems] = useState([])
   const [todayShifts, setTodayShifts] = useState([])
   const [pendingRequests, setPendingRequests] = useState([])
@@ -52,16 +53,20 @@ export default function Dashboard() {
     setLoading(true)
     const errors = {}
 
-    try {
-      const { data, error } = await supabase
-        .from(TABLES.INVENTORY)
-        .select('*')
-        .order('name', { ascending: true })
-      if (error) throw error
-      setLowItems((data || []).filter(i => Number(i.quantity || 0) <= Number(i.threshold || 5)))
-    } catch (err) {
-      console.error('Error fetching inventory for dashboard:', err)
-      errors.inventory = true
+    if (canManageInventory) {
+      try {
+        const { data, error } = await supabase
+          .from(TABLES.INVENTORY)
+          .select('*')
+          .order('name', { ascending: true })
+        if (error) throw error
+        setLowItems((data || []).filter(i => Number(i.quantity || 0) <= Number(i.threshold || 5)))
+      } catch (err) {
+        console.error('Error fetching inventory for dashboard:', err)
+        errors.inventory = true
+        setLowItems([])
+      }
+    } else {
       setLowItems([])
     }
 
@@ -115,7 +120,7 @@ export default function Dashboard() {
 
     setOptionalErrors(errors)
     setLoading(false)
-  }, [canReviewRequests])
+  }, [canManageInventory, canReviewRequests])
 
   useEffect(() => {
     fetchDashboard()
@@ -156,14 +161,16 @@ export default function Dashboard() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Link to="/inventory" className="card block hover:border-red-400">
-          <div className="mb-3 flex items-center gap-2">
-            <ExclamationTriangleIcon className="h-5 w-5 text-red-400" />
-            <h2 className="font-bold">Low Stock</h2>
-          </div>
-          <div className="text-3xl font-bold">{lowItems.length}</div>
-          <p className="mt-1 text-sm text-gray-400">{lowItems.length === 1 ? 'item needs attention' : 'items need attention'}</p>
-        </Link>
+        {canManageInventory && (
+          <Link to="/inventory" className="card block hover:border-red-400">
+            <div className="mb-3 flex items-center gap-2">
+              <ExclamationTriangleIcon className="h-5 w-5 text-red-400" />
+              <h2 className="font-bold">Low Stock</h2>
+            </div>
+            <div className="text-3xl font-bold">{lowItems.length}</div>
+            <p className="mt-1 text-sm text-gray-400">{lowItems.length === 1 ? 'item needs attention' : 'items need attention'}</p>
+          </Link>
+        )}
 
         <Link to="/schedule" className="card block hover:border-green-400">
           <div className="mb-3 flex items-center gap-2">
@@ -193,7 +200,7 @@ export default function Dashboard() {
         </Link>
       </div>
 
-      {lowItems.length > 0 && (
+      {canManageInventory && lowItems.length > 0 && (
         <div className="card border border-red-500 bg-red-500/20">
           <div className="mb-3 flex items-center gap-2">
             <ExclamationTriangleIcon className="h-6 w-6 text-red-500" />
@@ -233,7 +240,7 @@ export default function Dashboard() {
         <div className="card">
           <h2 className="mb-4 text-lg font-bold">Quick Actions</h2>
           <div className="grid grid-cols-2 gap-3">
-            <Link to="/inventory" className="btn-primary text-center">Add Item</Link>
+            {canManageInventory && <Link to="/inventory" className="btn-primary text-center">Add Item</Link>}
             <Link to="/schedule" className="btn-primary text-center">Add Shift</Link>
             <Link to="/checklists" className="btn-secondary text-center">Checklists</Link>
             <Link to="/timeoff" className="btn-secondary text-center">Time Off</Link>
