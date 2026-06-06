@@ -12,9 +12,9 @@ const RESTORE_SAFE_TABLES = [
 
 const REFERENCE_TABLES = [
   { key: 'profiles', table: TABLES.PROFILES, label: 'Profiles' },
-  { key: 'roles', table: 'roles', label: 'Roles' },
-  { key: 'user_roles', table: 'user_roles', label: 'User Roles' },
-  { key: 'announcements', table: 'announcements', label: 'Announcements' }
+  { key: 'roles', table: TABLES.ROLES, label: 'Roles' },
+  { key: 'user_roles', table: TABLES.USER_ROLES, label: 'User Roles' },
+  { key: 'announcements', table: TABLES.ANNOUNCEMENTS, label: 'Announcements' }
 ]
 
 const EMPTY_UUID = '00000000-0000-0000-0000-000000000000'

@@ -37,16 +37,6 @@ export default function Admin() {
   const roleOptions = ['admin', 'manager', 'staff', 'viewer'];
   const statusOptions = ['pending', 'approved', 'rejected', 'removed'];
 
-  // Redirect non-admins
-  if (profile?.role !== 'admin') {
-    return (
-      <div className="p-8 text-center">
-        <h1 className="text-2xl font-bold text-red-500">Access Denied</h1>
-        <p>You must be an administrator to view this page.</p>
-      </div>
-    );
-  }
-
   const fetchUsers = async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -62,8 +52,12 @@ export default function Admin() {
   };
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    if (profile?.role === 'admin') {
+      fetchUsers();
+    } else {
+      setLoading(false);
+    }
+  }, [profile?.role]);
 
   const startEdit = (user) => {
     setEditingId(user.id);
@@ -188,7 +182,18 @@ export default function Admin() {
   };
 
   const filteredUsers = users.filter(u => showRemoved || u.status !== 'removed');
-  const approvedNonRemovedUsers = users.filter(u => u.status === 'approved' && u.id !== profile.id);
+  const approvedNonRemovedUsers = users.filter(u => u.status === 'approved' && u.id !== profile?.id);
+
+  // Route guards normally prevent this, but keep the component hook order safe
+  // if role changes while the page is already mounted.
+  if (profile?.role !== 'admin') {
+    return (
+      <div className="p-8 text-center">
+        <h1 className="text-2xl font-bold text-red-500">Access Denied</h1>
+        <p>You must be an administrator to view this page.</p>
+      </div>
+    );
+  }
 
   // Role/status selects shown while editing a user (shared by table + cards).
   const renderEditSelects = (compact = false) => (
