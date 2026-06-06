@@ -5,6 +5,8 @@ import { TABLES } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { useNotifications } from '../components/Notifications'
+import IconButton from '../components/IconButton'
+import { useAppRefresh } from '../hooks/usePullToRefresh'
 
 // Format HH:MM to h:mm AM/PM
 const formatTime12 = (time24) => {
@@ -637,6 +639,8 @@ export default function Schedule() {
     fetchTimeOff()
   }
 
+  useAppRefresh(refreshSchedule)
+
   const exportCSV = () => {
     const header = "Name,Day,Start,End,Role,Month,Year";
     const data = shifts.map(s => {
@@ -973,7 +977,7 @@ export default function Schedule() {
           </button>
           {hasRole('manager') && (
             <button onClick={() => setShowAddShift(true)} className="btn-primary">
-              <PlusIcon className="w-4 h-4" /> Add
+              <PlusIcon className="w-5 h-5" /> Add
             </button>
           )}
         </div>
@@ -1006,38 +1010,23 @@ export default function Schedule() {
         <button onClick={nextView} className="p-3 bg-bar-card rounded-lg hover:bg-bar-blue transition-colors"><ChevronRightIcon className="w-5 h-5" /></button>
       </div>
 
-      {/* Role filter tabs */}
-      <div className="flex gap-2 overflow-x-auto md:justify-center md:flex-wrap mt-4 mb-2 pb-1">
-        <button 
-          onClick={() => setRoleFilter('all')} 
-          className={`px-4 py-2 rounded-lg ${roleFilter === 'all' ? 'bg-bar-accent font-semibold' : 'bg-bar-card hover:bg-bar-blue'}`}
-        >
-          All Roles
-        </button>
-        <button 
-          onClick={() => setRoleFilter('bartender')} 
-          className={`px-4 py-2 rounded-lg ${roleFilter === 'bartender' ? 'bg-bar-accent font-semibold' : 'bg-bar-card hover:bg-bar-blue'}`}
-        >
-          Bar
-        </button>
-        <button 
-          onClick={() => setRoleFilter('server')} 
-          className={`px-4 py-2 rounded-lg ${roleFilter === 'server' ? 'bg-bar-accent font-semibold' : 'bg-bar-card hover:bg-bar-blue'}`}
-        >
-          Server
-        </button>
-        <button 
-          onClick={() => setRoleFilter('cook')} 
-          className={`px-4 py-2 rounded-lg ${roleFilter === 'cook' ? 'bg-bar-accent font-semibold' : 'bg-bar-card hover:bg-bar-blue'}`}
-        >
-          Kitchen
-        </button>
-        <button 
-          onClick={() => setRoleFilter('manager')} 
-          className={`px-4 py-2 rounded-lg ${roleFilter === 'manager' ? 'bg-bar-accent font-semibold' : 'bg-bar-card hover:bg-bar-blue'}`}
-        >
-          Manager
-        </button>
+      {/* Role filter tabs — horizontal scroll-snap with comfortable taps */}
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 mt-4 mb-2 snap-x scrollbar-none md:mx-0 md:justify-center md:flex-wrap md:px-0">
+        {[
+          { key: 'all', label: 'All Roles' },
+          { key: 'bartender', label: 'Bar' },
+          { key: 'server', label: 'Server' },
+          { key: 'cook', label: 'Kitchen' },
+          { key: 'manager', label: 'Manager' },
+        ].map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setRoleFilter(key)}
+            className={`shrink-0 snap-start min-h-touch rounded-lg px-4 font-medium transition active:scale-[0.97] ${roleFilter === key ? 'bg-bar-accent font-semibold text-white' : 'bg-bar-card text-gray-300 hover:bg-bar-blue'}`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {view === 'week' ? (
@@ -1085,12 +1074,7 @@ export default function Schedule() {
                                   <div className="flex justify-between items-center">
                                     <div className="font-semibold">{s.name}</div>
                                     {hasRole('manager') && (
-                                      <button
-                                        onClick={() => deleteShift(s.id)}
-                                        className="text-red-500 hover:bg-red-500/20 p-1 rounded"
-                                      >
-                                        <TrashIcon className="w-4 h-4" />
-                                      </button>
+                                      <IconButton icon={TrashIcon} label={`Delete shift for ${s.name}`} tone="danger" onClick={() => deleteShift(s.id)} />
                                     )}
                                   </div>
                                   <div className="text-gray-400 text-sm mt-1">
@@ -1172,15 +1156,15 @@ export default function Schedule() {
                             <div className="flex justify-between items-center">
                               <div className="font-semibold">{s.name}</div>
                               {hasRole('manager') && (
-                                <button
+                                <IconButton
+                                  icon={TrashIcon}
+                                  label={`Delete shift for ${s.name}`}
+                                  tone="danger"
                                   onClick={(event) => {
                                     event.stopPropagation()
                                     deleteShift(s.id)
                                   }}
-                                  className="text-red-500 hover:bg-red-500/20 p-1 rounded"
-                                >
-                                  <TrashIcon className="w-4 h-4" />
-                                </button>
+                                />
                               )}
                             </div>
                             <div className="text-gray-400 text-sm mt-1">
@@ -1416,11 +1400,9 @@ export default function Schedule() {
                   <div key={shift.id} className="bg-bar-blue/10 p-4 rounded-xl border border-bar-blue/20 space-y-3">
                     <div className="flex justify-between items-center">
                       <h3 className="font-semibold text-lg">Shift #{builderShifts.indexOf(shift) + 1}</h3>
-                      <button onClick={() => removeShift(shift.id)} className="text-red-500 hover:bg-red-500/20 p-1 rounded">
-                        <TrashIcon className="w-5 h-5" />
-                      </button>
+                      <IconButton icon={TrashIcon} label={`Remove shift #${builderShifts.indexOf(shift) + 1}`} tone="danger" onClick={() => removeShift(shift.id)} />
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {/* Day */}
                       <div>

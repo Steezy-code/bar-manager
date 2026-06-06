@@ -5,6 +5,10 @@ import { TABLES } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { useNotifications } from '../components/Notifications'
+import Modal from '../components/Modal'
+import IconButton from '../components/IconButton'
+import { SkeletonList } from '../components/Skeleton'
+import { useAppRefresh } from '../hooks/usePullToRefresh'
 
 const getEmptyRequest = (profile) => ({
   name: profile?.full_name || '',
@@ -76,6 +80,8 @@ export default function TimeOff() {
     fetchTimeOff()
     fetchProfiles()
   }, [fetchTimeOff, fetchProfiles])
+
+  useAppRefresh(fetchTimeOff)
 
   const addPending = async (e) => {
     e.preventDefault()
@@ -205,11 +211,9 @@ export default function TimeOff() {
       <div className="space-y-6 pb-24 lg:pb-0">
         <div>
           <h1 className="text-2xl font-bold">Time Off</h1>
-          <p className="text-sm text-gray-400">Loading...</p>
+          <p className="text-sm text-gray-400">Loading…</p>
         </div>
-        <div className="card">
-          <div className="text-gray-400">Loading time off requests...</div>
-        </div>
+        <SkeletonList rows={4} />
       </div>
     )
   }
@@ -225,7 +229,7 @@ export default function TimeOff() {
         </div>
         {isApproved && (
           <button onClick={() => setShowAdd(true)} className="btn-primary self-start">
-            <PlusIcon className="h-4 w-4" /> Add Request
+            <PlusIcon className="h-5 w-5" /> Add Request
           </button>
         )}
       </div>
@@ -248,10 +252,10 @@ export default function TimeOff() {
                 </div>
                 {canManageRequests ? (
                   <div className="flex gap-2">
-                    <button onClick={() => approveRequest(t)} className="flex items-center gap-1 rounded bg-green-600 p-2 text-white hover:bg-green-500">
+                    <button onClick={() => approveRequest(t)} className="flex min-h-touch flex-1 items-center justify-center gap-1 rounded-lg bg-green-600 px-3 font-semibold text-white hover:bg-green-500 active:scale-[0.97] md:flex-none">
                       <CheckIcon className="h-5 w-5" /> Approve
                     </button>
-                    <button onClick={() => denyRequest(t)} className="flex items-center gap-1 rounded bg-red-600 p-2 text-white hover:bg-red-500">
+                    <button onClick={() => denyRequest(t)} className="flex min-h-touch flex-1 items-center justify-center gap-1 rounded-lg bg-red-600 px-3 font-semibold text-white hover:bg-red-500 active:scale-[0.97] md:flex-none">
                       <XMarkIcon className="h-5 w-5" /> Deny
                     </button>
                   </div>
@@ -272,14 +276,12 @@ export default function TimeOff() {
           <div className="space-y-3">
             {approved.map(t => (
               <div key={t.id} className="flex items-center justify-between gap-3 rounded-lg bg-bar-blue p-3">
-                <div>
-                  <div className="font-semibold">{t.name}</div>
+                <div className="min-w-0">
+                  <div className="truncate font-semibold">{t.name}</div>
                   <div className="text-sm text-gray-400">{t.dates} (Days: {t.days})</div>
                 </div>
                 {canManageRequests ? (
-                  <button onClick={() => removeApproved(t)} className="rounded p-2 text-red-500 hover:bg-red-500/20" aria-label={`Remove time off for ${t.name}`}>
-                    <TrashIcon className="h-5 w-5" />
-                  </button>
+                  <IconButton icon={TrashIcon} label={`Remove time off for ${t.name}`} tone="danger" onClick={() => removeApproved(t)} />
                 ) : null}
               </div>
             ))}
@@ -287,10 +289,8 @@ export default function TimeOff() {
         )}
       </div>
 
-      {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <form onSubmit={addPending} className="w-full max-w-md space-y-3 rounded-xl bg-bar-card p-6">
-            <h2 className="text-xl font-bold">Add Time Off Request</h2>
+      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add Time Off Request">
+          <form onSubmit={addPending} className="space-y-3">
             {profilesList.length > 0 ? (
               <select
                 className="input"
@@ -323,13 +323,12 @@ export default function TimeOff() {
               </select>
             </div>
             <p className="text-xs text-gray-400">Request goes to the queue. Managers approve it before it appears on the schedule.</p>
-            <div className="flex gap-2">
+            <div className="flex gap-2 pt-2">
               <button type="button" onClick={() => setShowAdd(false)} className="btn-secondary flex-1">Cancel</button>
               <button className="btn-primary flex-1">Add to Queue</button>
             </div>
           </form>
-        </div>
-      )}
+      </Modal>
     </div>
   )
 }

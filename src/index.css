@@ -2,10 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  /* Smooth in-app anchored scrolling; never bounce the whole document. */
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   background-color: #1a1a2e;
   color: #eaeaea;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  line-height: 1.5;
+  /* Disable the iOS tap-highlight flash; we provide our own active states. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Headings: a touch tighter for a more polished, app-like rhythm. */
+h1, h2, h3 {
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+/* Inputs should never trigger the iOS zoom-on-focus (needs >=16px font). */
+input, select, textarea {
+  font-size: 16px;
+}
+
+/* Respect reduced-motion: drop the press/shimmer animations. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Print Styles - Ink Friendly */
@@ -51,7 +82,7 @@ body {
     color: black !important;
   }
   /* Hide everything except content */
-  .print\:hidden, .btn-primary, .btn-secondary, .fixed, .inset-y-0, header, .border-t, nav, .sidebar {
+  .print\:hidden, .btn, .btn-primary, .btn-secondary, .btn-icon, .btn-ghost, .btn-danger, .fixed, .inset-y-0, header, .border-t, nav, .sidebar {
     display: none !important;
   }
   /* Remove dark backgrounds completely */
@@ -103,23 +134,76 @@ body {
 }
 
 @layer components {
+  /* Buttons — all share a 44px minimum tap target and a tactile press state.
+     inline-flex + centering so an icon and label always align. */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 min-h-touch px-4 py-2 rounded-lg font-semibold transition select-none
+      active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none focus:outline-none focus-visible:ring-2 focus-visible:ring-bar-accent;
+  }
   .btn-primary {
-    @apply bg-bar-accent text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-600 transition;
+    @apply btn bg-bar-accent text-white hover:bg-red-600;
   }
   .btn-secondary {
-    @apply bg-bar-blue text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition;
+    @apply btn bg-bar-blue text-white hover:bg-blue-700;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-gray-300 hover:bg-bar-blue hover:text-white;
+  }
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-500;
+  }
+  /* 44x44 icon-only button — replaces the cramped `p-1` icon buttons app-wide. */
+  .btn-icon {
+    @apply inline-flex items-center justify-center min-h-touch min-w-touch rounded-lg text-gray-300 transition
+      hover:bg-bar-blue hover:text-white active:scale-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-bar-accent;
   }
   .card {
     @apply bg-bar-card rounded-xl p-4 border border-bar-blue;
   }
-  .input {
-    @apply bg-bar-blue border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-bar-accent focus:outline-none w-full;
+  .input, .select, .textarea {
+    @apply bg-bar-blue border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-bar-accent focus:outline-none w-full min-h-touch;
+  }
+  .field-label {
+    @apply block text-sm font-medium text-gray-300 mb-1;
   }
   .badge {
-    @apply px-2 py-1 rounded-full text-xs font-bold;
+    @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-bold;
   }
   .badge-critical { @apply bg-red-500; }
   .badge-warning { @apply bg-yellow-500; }
   .badge-ok { @apply bg-green-500; }
   .badge-pending { @apply bg-blue-500; }
+
+  /* Shared mobile-first dialog surface: a bottom sheet on phones, a centered
+     card from md: up. Generalizes the pattern proven in Notifications.jsx. */
+  .modal-overlay {
+    @apply fixed inset-0 z-[80] flex items-end justify-center bg-black/60 p-0 md:items-center md:p-4;
+  }
+  .modal-sheet {
+    @apply w-full max-w-md max-h-[90vh] overflow-y-auto rounded-t-2xl bg-bar-card p-5 shadow-xl
+      pb-[calc(1.25rem+env(safe-area-inset-bottom))] md:rounded-xl md:pb-5;
+  }
+
+  /* Consistent tappable list row (>=44px) for card/list layouts. */
+  .list-row {
+    @apply flex items-center gap-3 min-h-touch rounded-lg bg-bar-blue p-3;
+  }
+
+  /* Loading shimmer placeholder. */
+  .skeleton {
+    @apply rounded-md bg-bar-surface bg-gradient-to-r from-bar-surface via-bar-blue to-bar-surface bg-[length:200%_100%] animate-shimmer;
+  }
+}
+
+@layer utilities {
+  /* Safe-area padding helpers for fixed chrome (bottom nav, headers). */
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .pl-safe { padding-left: env(safe-area-inset-left); }
+  .pr-safe { padding-right: env(safe-area-inset-right); }
+  .pb-safe-nav { padding-bottom: calc(env(safe-area-inset-bottom) + 1rem); }
+
+  /* Hide scrollbars on horizontal scroll-snap rows (selectors, week view). */
+  .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
 }
