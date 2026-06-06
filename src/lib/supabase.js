@@ -11,5 +11,8 @@ export const TABLES = {
   INVENTORY: 'inventory_items',
   SHIFTS: 'shifts',
   CHECKLISTS: 'checklists',
-  TIME_OFF: 'time_off_requests'
+  TIME_OFF: 'time_off_requests',
+  ANNOUNCEMENTS: 'announcements',
+  ROLES: 'roles',
+  USER_ROLES: 'user_roles'
 }

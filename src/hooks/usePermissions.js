@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 export const ROLE_HIERARCHY = {
@@ -14,16 +15,19 @@ export const usePermissions = () => {
   const status = profile?.status || 'pending';
   const isApproved = status === 'approved';
 
-  const getRoleLevel = (value) => ROLE_HIERARCHY[value] || 0;
+  const getRoleLevel = useCallback((value) => ROLE_HIERARCHY[value] || 0, []);
 
-  const hasRole = (requiredRole) => {
+  const hasRole = useCallback((requiredRole) => {
     if (!isApproved) return false;
     return getRoleLevel(role) >= getRoleLevel(requiredRole);
-  };
+  }, [getRoleLevel, isApproved, role]);
 
-  const hasExactRole = (requiredRole) => isApproved && role === requiredRole;
+  const hasExactRole = useCallback((requiredRole) => isApproved && role === requiredRole, [isApproved, role]);
 
-  const hasAnyRole = (roles) => isApproved && roles.some((candidate) => getRoleLevel(role) >= getRoleLevel(candidate));
+  const hasAnyRole = useCallback(
+    (roles) => isApproved && roles.some((candidate) => getRoleLevel(role) >= getRoleLevel(candidate)),
+    [getRoleLevel, isApproved, role]
+  );
 
   return {
     role,
