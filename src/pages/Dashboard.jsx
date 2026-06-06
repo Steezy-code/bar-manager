@@ -1,8 +1,16 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarIcon, ClipboardDocumentCheckIcon, ExclamationTriangleIcon, UserGroupIcon } from '@heroicons/react/24/outline'
+import {
+  CalendarIcon,
+  ClipboardDocumentCheckIcon,
+  ExclamationTriangleIcon,
+  UserGroupIcon,
+  CubeIcon,
+  ArrowPathIcon
+} from '@heroicons/react/24/outline'
 import { supabase } from '../lib/supabase'
 import { TABLES } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { Skeleton, SkeletonList } from '../components/Skeleton'
 import { useAppRefresh } from '../hooks/usePullToRefresh'
@@ -39,7 +47,63 @@ const countTasks = (tasks = {}) => {
   }
 }
 
+const normalizeText = (value) => String(value || '').trim().toLowerCase()
+
+const StatusPill = ({ children, tone = 'default' }) => {
+  const toneClass =
+    tone === 'danger'
+      ? 'bg-red-500/20 text-red-200'
+      : tone === 'warning'
+        ? 'bg-yellow-500/20 text-yellow-100'
+        : tone === 'success'
+          ? 'bg-green-500/20 text-green-200'
+          : 'bg-bar-blue text-gray-200'
+
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${toneClass}`}>
+      {children}
+    </span>
+  )
+}
+
+const ActionRow = ({ icon: Icon, title, detail, to, actionLabel, tone = 'default' }) => {
+  const iconClass =
+    tone === 'danger'
+      ? 'text-red-300'
+      : tone === 'warning'
+        ? 'text-yellow-200'
+        : tone === 'success'
+          ? 'text-green-300'
+          : 'text-bar-accent'
+
+  return (
+    <div className="flex items-center gap-3 rounded-lg bg-bar-blue/30 p-3">
+      <Icon className={`h-5 w-5 shrink-0 ${iconClass}`} />
+      <div className="min-w-0 flex-1">
+        <div className="font-semibold leading-tight">{title}</div>
+        <div className="mt-0.5 truncate text-sm text-gray-400">{detail}</div>
+      </div>
+      <Link to={to} className="shrink-0 rounded-lg bg-bar-card px-3 py-2 text-sm font-semibold text-bar-accent hover:bg-bar-blue">
+        {actionLabel}
+      </Link>
+    </div>
+  )
+}
+
+const ShiftRow = ({ shift }) => (
+  <div className="flex items-center justify-between gap-3 rounded-lg bg-bar-blue/30 p-3">
+    <div className="min-w-0">
+      <div className="truncate font-semibold">{shift.staff_name || 'Shift'}</div>
+      <div className="text-sm text-gray-400">{shift.role || 'staff'}</div>
+    </div>
+    <div className="shrink-0 text-right text-sm text-gray-200">
+      {formatTime12(shift.start_time)} - {formatTime12(shift.end_time)}
+    </div>
+  </div>
+)
+
 export default function Dashboard() {
+  const { user, profile } = useAuth()
   const { hasRole } = usePermissions()
   const canReviewRequests = hasRole('manager')
   const canManageInventory = hasRole('manager')
@@ -51,9 +115,10 @@ export default function Dashboard() {
   const [greeting, setGreeting] = useState(getGreeting())
   const [loading, setLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const hasLoadedRef = useRef(false)
 
   const fetchDashboard = useCallback(async () => {
-    if (!loading) setIsRefreshing(true)
+    if (hasLoadedRef.current) setIsRefreshing(true)
     else setLoading(true)
 
     const [invResult, shiftsResult, checklistResult, timeOffResult] = await Promise.allSettled([
@@ -102,6 +167,7 @@ export default function Dashboard() {
     }
 
     setOptionalErrors(errors)
+    hasLoadedRef.current = true
     setLoading(false)
     setIsRefreshing(false)
   }, [canManageInventory, canReviewRequests])
@@ -117,33 +183,96 @@ export default function Dashboard() {
     return () => clearInterval(interval)
   }, [])
 
+  const userMatchTerms = useMemo(() => {
+    const terms = [
+      profile?.full_name,
+      profile?.email,
+      user?.email,
+      user?.user_metadata?.full_name,
+      user?.user_metadata?.name
+    ]
+    return [...new Set(terms.map(normalizeText).filter(Boolean))]
+  }, [profile, user])
+
+  const myShifts = useMemo(() => (
+    todayShifts.filter(shift => {
+      const staffName = normalizeText(shift.staff_name)
+      return staffName && userMatchTerms.some(term => staffName === term || staffName.includes(term) || term.includes(staffName))
+    })
+  ), [todayShifts, userMatchTerms])
+
+  const checklistRemaining = Math.max(0, checklistStatus.total - checklistStatus.completed)
+  const checklistPercent = checklistStatus.total
+    ? Math.round((checklistStatus.completed / checklistStatus.total) * 100)
+    : 0
   const hasOptionalErrors = Object.keys(optionalErrors).length > 0
+  const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 
   if (loading) {
     return (
-      <div className="space-y-6 pb-24 lg:pb-0">
-        <h1 className="text-2xl font-bold">{greeting}</h1>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="card space-y-3">
-              <Skeleton className="h-4 w-1/2" />
-              <Skeleton className="h-8 w-1/3" />
-            </div>
-          ))}
+      <div className="space-y-4 pb-24 lg:pb-0">
+        <div className="flex items-center justify-between gap-3">
+          <div className="space-y-2">
+            <Skeleton className="h-7 w-40" />
+            <Skeleton className="h-4 w-52" />
+          </div>
+          <Skeleton className="h-10 w-24" />
+        </div>
+        <div className="card space-y-3">
+          <Skeleton className="h-4 w-28" />
+          <SkeletonList rows={4} />
         </div>
         <SkeletonList rows={3} />
       </div>
     )
   }
 
+  const managerActionRows = [
+    {
+      icon: UserGroupIcon,
+      title: `${pendingRequests.length} pending time off`,
+      detail: pendingRequests.length ? 'Requests need review' : 'No requests waiting',
+      to: '/timeoff',
+      actionLabel: 'Review',
+      tone: pendingRequests.length ? 'warning' : 'success'
+    },
+    {
+      icon: CubeIcon,
+      title: `${lowItems.length} low-stock ${lowItems.length === 1 ? 'item' : 'items'}`,
+      detail: lowItems.length ? lowItems.slice(0, 3).map(item => item.name).join(', ') : 'Inventory is above thresholds',
+      to: '/inventory',
+      actionLabel: 'Open',
+      tone: lowItems.length ? 'danger' : 'success'
+    },
+    {
+      icon: ClipboardDocumentCheckIcon,
+      title: checklistStatus.total ? `${checklistRemaining} checklist tasks left` : 'No checklist tasks found',
+      detail: checklistStatus.total ? `${checklistStatus.completed}/${checklistStatus.total} complete` : 'Open checklists to set today up',
+      to: '/checklists',
+      actionLabel: 'Check',
+      tone: checklistRemaining ? 'warning' : 'success'
+    },
+    {
+      icon: CalendarIcon,
+      title: `${todayShifts.length} shifts today`,
+      detail: todayShifts.length ? 'Schedule is ready to scan' : 'No shifts scheduled today',
+      to: '/schedule',
+      actionLabel: 'View',
+      tone: todayShifts.length ? 'default' : 'warning'
+    }
+  ]
+
   return (
-    <div className="space-y-6 pb-24 lg:pb-0">
+    <div className="space-y-4 pb-24 lg:pb-0">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">{greeting}</h1>
-          <p className="text-gray-400">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+          <p className="text-gray-400">{todayLabel}</p>
         </div>
-        <button onClick={fetchDashboard} disabled={isRefreshing} className="btn-secondary self-start text-sm md:self-auto">{isRefreshing ? 'Refreshing…' : 'Refresh'}</button>
+        <button onClick={fetchDashboard} disabled={isRefreshing} className="btn-secondary self-start text-sm md:self-auto">
+          <ArrowPathIcon className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          {isRefreshing ? 'Refreshing...' : 'Refresh'}
+        </button>
       </div>
 
       {hasOptionalErrors && (
@@ -152,92 +281,105 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {canManageInventory && (
-          <Link to="/inventory" className="card block hover:border-red-400">
-            <div className="mb-3 flex items-center gap-2">
-              <ExclamationTriangleIcon className="h-5 w-5 text-red-400" />
-              <h2 className="font-bold">Low Stock</h2>
+      {canReviewRequests ? (
+        <section className="card space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold">Action Queue</h2>
+              <p className="text-sm text-gray-400">What needs manager attention right now.</p>
             </div>
-            <div className="text-3xl font-bold">{lowItems.length}</div>
-            <p className="mt-1 text-sm text-gray-400">{lowItems.length === 1 ? 'item needs attention' : 'items need attention'}</p>
-          </Link>
-        )}
-
-        <Link to="/schedule" className="card block hover:border-green-400">
-          <div className="mb-3 flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5 text-green-400" />
-            <h2 className="font-bold">Today&apos;s Shifts</h2>
+            <StatusPill tone={pendingRequests.length || lowItems.length || checklistRemaining ? 'warning' : 'success'}>
+              {pendingRequests.length + lowItems.length + checklistRemaining} open
+            </StatusPill>
           </div>
-          <div className="text-3xl font-bold">{todayShifts.length}</div>
-          <p className="mt-1 text-sm text-gray-400">scheduled today</p>
-        </Link>
-
-        <Link to="/checklists" className="card block hover:border-blue-400">
-          <div className="mb-3 flex items-center gap-2">
-            <ClipboardDocumentCheckIcon className="h-5 w-5 text-blue-400" />
-            <h2 className="font-bold">Checklists</h2>
+          <div className="grid gap-2 lg:grid-cols-2">
+            {managerActionRows.map(row => <ActionRow key={row.title} {...row} />)}
           </div>
-          <div className="text-3xl font-bold">{checklistStatus.completed}/{checklistStatus.total}</div>
-          <p className="mt-1 text-sm text-gray-400">tasks completed</p>
-        </Link>
-
-        <Link to="/timeoff" className="card block hover:border-yellow-400">
-          <div className="mb-3 flex items-center gap-2">
-            <UserGroupIcon className="h-5 w-5 text-yellow-400" />
-            <h2 className="font-bold">Time Off</h2>
+        </section>
+      ) : (
+        <section className="card space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold">My Day</h2>
+              <p className="text-sm text-gray-400">Your shift context and daily tasks.</p>
+            </div>
+            <StatusPill tone={myShifts.length ? 'success' : 'default'}>
+              {myShifts.length ? `${myShifts.length} shift${myShifts.length === 1 ? '' : 's'}` : 'Team view'}
+            </StatusPill>
           </div>
-          <div className="text-3xl font-bold">{canReviewRequests ? pendingRequests.length : '-'}</div>
-          <p className="mt-1 text-sm text-gray-400">{canReviewRequests ? 'pending requests' : 'request status'}</p>
-        </Link>
-      </div>
 
-      {canManageInventory && lowItems.length > 0 && (
-        <div className="card border border-red-500 bg-red-500/20">
-          <div className="mb-3 flex items-center gap-2">
-            <ExclamationTriangleIcon className="h-6 w-6 text-red-500" />
-            <h2 className="font-bold text-red-400">Low Stock Alert</h2>
-          </div>
-          <div className="space-y-2">
-            {lowItems.slice(0, 6).map(i => (
-              <div key={i.id} className="flex justify-between rounded bg-red-600/30 p-2">
-                <span>{i.name}</span>
-                <span className="text-red-300">Only {i.quantity} left</span>
-              </div>
-            ))}
-          </div>
-          <Link to="/inventory" className="btn-primary mt-4 block w-full text-center">
-            Go to Inventory
-          </Link>
-        </div>
-      )}
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="card">
-          <h2 className="mb-4 text-lg font-bold">Today&apos;s Schedule</h2>
-          {todayShifts.length === 0 ? (
-            <p className="text-gray-400">No shifts scheduled for today.</p>
+          {myShifts.length > 0 ? (
+            <div className="space-y-2">
+              {myShifts.slice(0, 2).map(shift => <ShiftRow key={shift.id} shift={shift} />)}
+            </div>
           ) : (
-            <div className="space-y-3">
-              {todayShifts.slice(0, 6).map(shift => (
-                <div key={shift.id} className="rounded-lg bg-bar-blue p-3">
-                  <div className="font-semibold">{shift.staff_name || 'Shift'}</div>
-                  <div className="text-sm text-gray-300">{formatTime12(shift.start_time)} - {formatTime12(shift.end_time)} {shift.role ? `(${shift.role})` : ''}</div>
-                </div>
-              ))}
+            <div className="rounded-lg bg-bar-blue/30 p-3">
+              <div className="font-semibold">{todayShifts.length ? `${todayShifts.length} team shifts today` : 'No shifts scheduled today'}</div>
+              <div className="text-sm text-gray-400">{todayShifts.length ? 'Open the schedule for the full team view.' : 'Check back when the schedule is posted.'}</div>
             </div>
           )}
-        </div>
 
-        <div className="card">
-          <h2 className="mb-4 text-lg font-bold">Quick Actions</h2>
-          <div className="grid grid-cols-2 gap-3">
-            {canManageInventory && <Link to="/inventory" className="btn-primary text-center">Add Item</Link>}
-            <Link to="/schedule" className="btn-primary text-center">Add Shift</Link>
-            <Link to="/checklists" className="btn-secondary text-center">Checklists</Link>
-            <Link to="/timeoff" className="btn-secondary text-center">Time Off</Link>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Link to="/schedule" className="btn-primary justify-center text-center">View schedule</Link>
+            <Link to="/checklists" className="btn-secondary justify-center text-center">{checklistPercent}% checklists</Link>
+            <Link to="/timeoff" className="btn-secondary justify-center text-center">Time off</Link>
           </div>
-        </div>
+        </section>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        <section className="card space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold">Today&apos;s Schedule</h2>
+              <p className="text-sm text-gray-400">{todayShifts.length} scheduled</p>
+            </div>
+            <Link to="/schedule" className="text-sm font-semibold text-bar-accent hover:text-white">Open</Link>
+          </div>
+          {todayShifts.length === 0 ? (
+            <p className="rounded-lg bg-bar-blue/30 p-3 text-gray-400">No shifts scheduled for today.</p>
+          ) : (
+            <div className="space-y-2">
+              {todayShifts.slice(0, 6).map(shift => <ShiftRow key={shift.id} shift={shift} />)}
+              {todayShifts.length > 6 && (
+                <Link to="/schedule" className="block rounded-lg bg-bar-blue/20 p-3 text-center text-sm font-semibold text-bar-accent hover:bg-bar-blue/40">
+                  View {todayShifts.length - 6} more shifts
+                </Link>
+              )}
+            </div>
+          )}
+        </section>
+
+        <section className="card space-y-3">
+          <div>
+            <h2 className="text-lg font-bold">Checklist Pulse</h2>
+            <p className="text-sm text-gray-400">{checklistStatus.completed}/{checklistStatus.total} tasks complete</p>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-bar-blue">
+            <div className="h-full rounded-full bg-bar-accent" style={{ width: `${checklistPercent}%` }} />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-bar-blue/30 p-3">
+            <span className="text-sm text-gray-300">{checklistRemaining ? `${checklistRemaining} remaining` : 'All caught up'}</span>
+            <Link to="/checklists" className="text-sm font-semibold text-bar-accent hover:text-white">Open checklists</Link>
+          </div>
+          {canManageInventory && lowItems.length > 0 && (
+            <div className="rounded-lg border border-red-500/60 bg-red-500/15 p-3">
+              <div className="mb-2 flex items-center gap-2 font-semibold text-red-200">
+                <ExclamationTriangleIcon className="h-5 w-5" />
+                Low stock
+              </div>
+              <div className="space-y-1 text-sm text-gray-200">
+                {lowItems.slice(0, 4).map(item => (
+                  <div key={item.id} className="flex justify-between gap-3">
+                    <span className="truncate">{item.name}</span>
+                    <span className="shrink-0 text-red-200">{item.quantity} {item.unit}</span>
+                  </div>
+                ))}
+              </div>
+              <Link to="/inventory" className="mt-3 block text-sm font-semibold text-bar-accent hover:text-white">Open inventory</Link>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   )

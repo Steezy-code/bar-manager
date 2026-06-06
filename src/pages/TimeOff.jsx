@@ -32,6 +32,8 @@ export default function TimeOff() {
   const [newTimeOff, setNewTimeOff] = useState(() => getEmptyRequest(profile))
   const [loading, setLoading] = useState(true)
   const [monthIsOneIndexed, setMonthIsOneIndexed] = useState(false)
+  const [savingRequest, setSavingRequest] = useState(false)
+  const [processingRequestId, setProcessingRequestId] = useState(null)
 
   const fetchTimeOff = useCallback(async () => {
     setLoading(true)
@@ -85,6 +87,7 @@ export default function TimeOff() {
 
   const addPending = async (e) => {
     e.preventDefault()
+    if (savingRequest) return
     if (!user) {
       notify('You must be logged in to add a request.', 'error')
       return
@@ -110,6 +113,7 @@ export default function TimeOff() {
     }
 
     try {
+      setSavingRequest(true)
       const { data, error } = await supabase
         .from(TABLES.TIME_OFF)
         .insert([requestToInsert])
@@ -123,15 +127,19 @@ export default function TimeOff() {
     } catch (err) {
       console.error('Error adding time off request:', err)
       notify('Failed to add request to database.', 'error')
+    } finally {
+      setSavingRequest(false)
     }
   }
 
   const approveRequest = async (request) => {
+    if (processingRequestId) return
     if (!canManageRequests) {
       notify('Only managers can approve time off requests.', 'error')
       return
     }
 
+    setProcessingRequestId(request.id)
     setPending(current => current.filter(p => p.id !== request.id))
     setApproved(current => [{ ...request, status: 'approved' }, ...current])
     try {
@@ -146,22 +154,29 @@ export default function TimeOff() {
       setPending(current => [request, ...current])
       setApproved(current => current.filter(a => a.id !== request.id))
       notify('Failed to approve request in database.', 'error')
+    } finally {
+      setProcessingRequestId(null)
     }
   }
 
   const denyRequest = async (request) => {
+    if (processingRequestId) return
     if (!canManageRequests) {
       notify('Only managers can deny time off requests.', 'error')
       return
     }
 
+    setProcessingRequestId(request.id)
     const confirmed = await confirmAction({
       title: 'Deny time off request?',
       message: `Deny ${request.name}'s request for ${request.dates}?`,
       confirmLabel: 'Deny',
       danger: true
     })
-    if (!confirmed) return
+    if (!confirmed) {
+      setProcessingRequestId(null)
+      return
+    }
 
     try {
       const { error } = await supabase
@@ -175,22 +190,29 @@ export default function TimeOff() {
     } catch (err) {
       console.error('Error denying request:', err)
       notify('Failed to deny request in database.', 'error')
+    } finally {
+      setProcessingRequestId(null)
     }
   }
 
   const removeApproved = async (request) => {
+    if (processingRequestId) return
     if (!canManageRequests) {
       notify('Only managers can remove approved time off.', 'error')
       return
     }
 
+    setProcessingRequestId(request.id)
     const confirmed = await confirmAction({
       title: 'Remove approved time off?',
       message: `Remove ${request.name}'s approved time off for ${request.dates}?`,
       confirmLabel: 'Remove',
       danger: true
     })
-    if (!confirmed) return
+    if (!confirmed) {
+      setProcessingRequestId(null)
+      return
+    }
 
     try {
       const { error } = await supabase
@@ -204,6 +226,8 @@ export default function TimeOff() {
     } catch (err) {
       console.error('Error removing approved request:', err)
       notify('Failed to remove request from database.', 'error')
+    } finally {
+      setProcessingRequestId(null)
     }
   }
 
@@ -253,10 +277,10 @@ export default function TimeOff() {
                 </div>
                 {canManageRequests ? (
                   <div className="flex gap-2">
-                    <button onClick={() => approveRequest(t)} className="flex min-h-touch flex-1 items-center justify-center gap-1 rounded-lg bg-green-600 px-3 font-semibold text-white hover:bg-green-500 active:scale-[0.97] md:flex-none">
+                    <button onClick={() => approveRequest(t)} disabled={!!processingRequestId} className="flex min-h-touch flex-1 items-center justify-center gap-1 rounded-lg bg-green-600 px-3 font-semibold text-white hover:bg-green-500 active:scale-[0.97] disabled:opacity-50 md:flex-none">
                       <CheckIcon className="h-5 w-5" /> Approve
                     </button>
-                    <button onClick={() => denyRequest(t)} className="flex min-h-touch flex-1 items-center justify-center gap-1 rounded-lg bg-red-600 px-3 font-semibold text-white hover:bg-red-500 active:scale-[0.97] md:flex-none">
+                    <button onClick={() => denyRequest(t)} disabled={!!processingRequestId} className="flex min-h-touch flex-1 items-center justify-center gap-1 rounded-lg bg-red-600 px-3 font-semibold text-white hover:bg-red-500 active:scale-[0.97] disabled:opacity-50 md:flex-none">
                       <XMarkIcon className="h-5 w-5" /> Deny
                     </button>
                   </div>
@@ -282,7 +306,7 @@ export default function TimeOff() {
                   <div className="text-sm text-gray-400">{t.dates} (Days: {t.days})</div>
                 </div>
                 {canManageRequests ? (
-                  <IconButton icon={TrashIcon} label={`Remove time off for ${t.name}`} tone="danger" onClick={() => removeApproved(t)} />
+                  <IconButton icon={TrashIcon} label={`Remove time off for ${t.name}`} tone="danger" disabled={!!processingRequestId} onClick={() => removeApproved(t)} />
                 ) : null}
               </div>
             ))}
@@ -333,7 +357,7 @@ export default function TimeOff() {
             <p className="text-xs text-gray-400">Request goes to the queue. Managers approve it before it appears on the schedule.</p>
             <div className="flex gap-2 pt-2">
               <button type="button" onClick={() => setShowAdd(false)} className="btn-secondary flex-1">Cancel</button>
-              <button className="btn-primary flex-1">Add to Queue</button>
+              <button disabled={savingRequest} className="btn-primary flex-1 disabled:opacity-50">{savingRequest ? 'Adding...' : 'Add to Queue'}</button>
             </div>
           </form>
       </Modal>
