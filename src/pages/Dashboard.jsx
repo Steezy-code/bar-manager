@@ -4,6 +4,8 @@ import { CalendarIcon, ClipboardDocumentCheckIcon, ExclamationTriangleIcon, User
 import { supabase } from '../lib/supabase'
 import { TABLES } from '../lib/supabase'
 import { usePermissions } from '../hooks/usePermissions'
+import { Skeleton, SkeletonList } from '../components/Skeleton'
+import { useAppRefresh } from '../hooks/usePullToRefresh'
 
 const getGreeting = () => {
   const hour = new Date().getHours()
@@ -126,6 +128,8 @@ export default function Dashboard() {
     fetchDashboard()
   }, [fetchDashboard])
 
+  useAppRefresh(fetchDashboard)
+
   useEffect(() => {
     const interval = setInterval(() => setGreeting(getGreeting()), 60000)
     return () => clearInterval(interval)
@@ -137,9 +141,15 @@ export default function Dashboard() {
     return (
       <div className="space-y-6 pb-24 lg:pb-0">
         <h1 className="text-2xl font-bold">{greeting}</h1>
-        <div className="card">
-          <div className="text-gray-400">Loading dashboard...</div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="card space-y-3">
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-8 w-1/3" />
+            </div>
+          ))}
         </div>
+        <SkeletonList rows={3} />
       </div>
     )
   }
