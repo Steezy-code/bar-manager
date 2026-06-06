@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   ArrowDownTrayIcon,
   ArrowUpTrayIcon,
@@ -108,6 +108,7 @@ export default function Inventory() {
   const [categorySupported, setCategorySupported] = useState(false)
   const [importReport, setImportReport] = useState(null)
   const [updatingId, setUpdatingId] = useState(null)
+  const [categoryFilter, setCategoryFilter] = useState('all')
   const categoryDetectedRef = useRef(false)
 
   const detectCategorySupport = useCallback(async () => {
@@ -468,6 +469,11 @@ export default function Inventory() {
     fileRef.current.value = ''
   }
 
+  const categories = useMemo(
+    () => [...new Set(items.map(i => i.category).filter(Boolean))].sort(),
+    [items]
+  )
+
   const highlight = (text, query) => {
     if (!query) return text
     const idx = text.toLowerCase().indexOf(query.toLowerCase())
@@ -480,7 +486,8 @@ export default function Inventory() {
     const haystack = `${item.name || ''} ${item.unit || ''} ${item.category || ''}`.toLowerCase()
     const matchesSearch = haystack.includes(search.trim().toLowerCase())
     const matchesLow = !showLowOnly || Number(item.quantity || 0) <= Number(item.threshold || 5)
-    return matchesSearch && matchesLow
+    const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter
+    return matchesSearch && matchesLow && matchesCategory
   })
 
   if (!canManageInventory) {
@@ -549,7 +556,7 @@ export default function Inventory() {
             className="input md:flex-1"
             placeholder="Search inventory..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setCategoryFilter('all') }}
           />
           <label className="flex items-center gap-2 text-sm text-gray-300">
             <input
@@ -562,6 +569,20 @@ export default function Inventory() {
           </label>
         </div>
       </div>
+
+      {categorySupported && categories.length > 1 && (
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 snap-x snap-mandatory scrollbar-none">
+          {['all', ...categories].map(cat => (
+            <button
+              key={cat}
+              onClick={() => setCategoryFilter(cat)}
+              className={`shrink-0 snap-start min-h-touch rounded-lg px-4 font-medium capitalize transition active:scale-[0.97] ${categoryFilter === cat ? 'bg-bar-accent font-semibold text-white' : 'bg-bar-card text-gray-300 hover:bg-bar-blue'}`}
+            >
+              {cat === 'all' ? 'All' : cat}
+            </button>
+          ))}
+        </div>
+      )}
 
       {lowItems.length > 0 && (
         <div className="card border border-red-500 bg-red-500/20">
