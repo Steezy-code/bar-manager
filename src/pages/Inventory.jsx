@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   ArrowDownTrayIcon,
   ArrowUpTrayIcon,
@@ -107,8 +107,12 @@ export default function Inventory() {
   const [loading, setLoading] = useState(true)
   const [categorySupported, setCategorySupported] = useState(false)
   const [importReport, setImportReport] = useState(null)
+  const [updatingId, setUpdatingId] = useState(null)
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  const categoryDetectedRef = useRef(false)
 
   const detectCategorySupport = useCallback(async () => {
+    if (categoryDetectedRef.current) return categorySupported
     try {
       const { error } = await supabase
         .from(TABLES.INVENTORY)
@@ -117,12 +121,14 @@ export default function Inventory() {
 
       const supported = !error
       setCategorySupported(supported)
+      categoryDetectedRef.current = true
       return supported
     } catch (err) {
       setCategorySupported(false)
+      categoryDetectedRef.current = true
       return false
     }
-  }, [])
+  }, [categorySupported])
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
@@ -150,23 +156,26 @@ export default function Inventory() {
   useAppRefresh(fetchItems)
 
   const update = async (id, delta) => {
-    if (!canManageInventory) return
+    if (!canManageInventory || updatingId) return
 
     const item = items.find(i => i.id === id)
     if (!item) return
 
     const newQuantity = Math.max(0, Number(item.quantity || 0) + delta)
+    setItems(current => current.map(i => i.id === id ? { ...i, quantity: newQuantity } : i))
+    setUpdatingId(id)
     try {
       const { error } = await supabase
         .from(TABLES.INVENTORY)
         .update({ quantity: newQuantity })
         .eq('id', id)
       if (error) throw error
-
-      setItems(current => current.map(i => i.id === id ? { ...i, quantity: newQuantity } : i))
     } catch (err) {
       console.error('Error updating quantity:', err)
+      setItems(current => current.map(i => i.id === id ? { ...i, quantity: item.quantity } : i))
       notify('Failed to update quantity in database.', 'error')
+    } finally {
+      setUpdatingId(null)
     }
   }
 
@@ -460,12 +469,25 @@ export default function Inventory() {
     fileRef.current.value = ''
   }
 
+  const categories = useMemo(
+    () => [...new Set(items.map(i => i.category).filter(Boolean))].sort(),
+    [items]
+  )
+
+  const highlight = (text, query) => {
+    if (!query) return text
+    const idx = text.toLowerCase().indexOf(query.toLowerCase())
+    if (idx === -1) return text
+    return <>{text.slice(0, idx)}<mark className="bg-yellow-300/30 text-white rounded px-0.5">{text.slice(idx, idx + query.length)}</mark>{text.slice(idx + query.length)}</>
+  }
+
   const lowItems = items.filter(i => Number(i.quantity || 0) <= Number(i.threshold || 5))
   const filteredItems = items.filter(item => {
     const haystack = `${item.name || ''} ${item.unit || ''} ${item.category || ''}`.toLowerCase()
     const matchesSearch = haystack.includes(search.trim().toLowerCase())
     const matchesLow = !showLowOnly || Number(item.quantity || 0) <= Number(item.threshold || 5)
-    return matchesSearch && matchesLow
+    const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter
+    return matchesSearch && matchesLow && matchesCategory
   })
 
   if (!canManageInventory) {
@@ -534,7 +556,7 @@ export default function Inventory() {
             className="input md:flex-1"
             placeholder="Search inventory..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setCategoryFilter('all') }}
           />
           <label className="flex items-center gap-2 text-sm text-gray-300">
             <input
@@ -547,6 +569,20 @@ export default function Inventory() {
           </label>
         </div>
       </div>
+
+      {categorySupported && categories.length > 1 && (
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 snap-x snap-mandatory scrollbar-none">
+          {['all', ...categories].map(cat => (
+            <button
+              key={cat}
+              onClick={() => setCategoryFilter(cat)}
+              className={`shrink-0 snap-start min-h-touch rounded-lg px-4 font-medium capitalize transition active:scale-[0.97] ${categoryFilter === cat ? 'bg-bar-accent font-semibold text-white' : 'bg-bar-card text-gray-300 hover:bg-bar-blue'}`}
+            >
+              {cat === 'all' ? 'All' : cat}
+            </button>
+          ))}
+        </div>
+      )}
 
       {lowItems.length > 0 && (
         <div className="card border border-red-500 bg-red-500/20">
@@ -569,7 +605,7 @@ export default function Inventory() {
             <div key={i.id} className={`card ${isLow ? 'border-red-500' : ''}`}>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <h3 className="font-semibold">{i.name}</h3>
+                  <h3 className="font-semibold">{highlight(i.name, search.trim())}</h3>
                   {categorySupported && i.category && <p className="text-xs text-gray-400">{i.category}</p>}
                   {isLow && <p className="text-xs text-red-400">Low stock (min: {i.threshold})</p>}
                 </div>
@@ -579,9 +615,9 @@ export default function Inventory() {
                 </div>
               </div>
               <div className="mt-3 flex items-center">
-                <button onClick={() => update(i.id, -1)} className="flex h-11 w-11 items-center justify-center rounded-lg bg-bar-blue active:scale-90" aria-label={`Decrease ${i.name}`}><MinusIcon className="h-5 w-5" /></button>
+                <button onClick={() => update(i.id, -1)} disabled={updatingId === i.id} className="flex h-11 w-11 items-center justify-center rounded-lg bg-bar-blue active:scale-90 disabled:opacity-50" aria-label={`Decrease ${i.name}`}><MinusIcon className="h-5 w-5" /></button>
                 <span className="mx-4 text-lg font-bold tabular-nums">{i.quantity}</span>
-                <button onClick={() => update(i.id, 1)} className="flex h-11 w-11 items-center justify-center rounded-lg bg-bar-blue active:scale-90" aria-label={`Increase ${i.name}`}><PlusIcon className="h-5 w-5" /></button>
+                <button onClick={() => update(i.id, 1)} disabled={updatingId === i.id} className="flex h-11 w-11 items-center justify-center rounded-lg bg-bar-blue active:scale-90 disabled:opacity-50" aria-label={`Increase ${i.name}`}><PlusIcon className="h-5 w-5" /></button>
                 <span className="ml-3 text-sm text-gray-400">{i.unit}</span>
               </div>
             </div>

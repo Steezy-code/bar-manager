@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { HomeIcon, CubeIcon, CalendarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, Cog6ToothIcon, Bars3Icon, XMarkIcon, UserIcon, ArrowRightOnRectangleIcon, ShieldCheckIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
+import { supabase } from '../lib/supabase'
+import { TABLES } from '../lib/supabase'
 
 const navItems = [
   { name: 'Dashboard', path: '/', icon: HomeIcon },
@@ -16,9 +18,39 @@ const navItems = [
 
 export default function Layout({ user, onLogout }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [pendingTimeOffCount, setPendingTimeOffCount] = useState(0)
+  const [pendingUsersCount, setPendingUsersCount] = useState(0)
   const navigate = useNavigate()
   const { profile } = useAuth()
   const { hasRole, isApproved } = usePermissions()
+
+  const fetchBadgeCounts = useCallback(async () => {
+    const queries = []
+    if (hasRole('manager')) {
+      queries.push(
+        supabase.from(TABLES.TIME_OFF).select('id', { count: 'exact', head: true }).eq('status', 'pending')
+      )
+    } else {
+      queries.push(Promise.resolve({ count: 0, error: null }))
+    }
+    if (hasRole('admin')) {
+      queries.push(
+        supabase.from(TABLES.PROFILES).select('id', { count: 'exact', head: true }).eq('status', 'pending')
+      )
+    } else {
+      queries.push(Promise.resolve({ count: 0, error: null }))
+    }
+    const [timeOffResult, usersResult] = await Promise.all(queries)
+    if (!timeOffResult.error) setPendingTimeOffCount(timeOffResult.count || 0)
+    if (!usersResult.error) setPendingUsersCount(usersResult.count || 0)
+  }, [hasRole])
+
+  useEffect(() => {
+    fetchBadgeCounts()
+    const handler = () => fetchBadgeCounts()
+    window.addEventListener('app:refresh', handler)
+    return () => window.removeEventListener('app:refresh', handler)
+  }, [fetchBadgeCounts])
 
   // Pull-to-refresh: tells the active page to re-fetch (pages opt in via useAppRefresh).
   const { distance, refreshing, pulling } = usePullToRefresh(async () => {
@@ -50,6 +82,11 @@ export default function Layout({ user, onLogout }) {
     allNavItems.push({ name: 'Admin', path: '/admin', icon: ShieldCheckIcon })
   }
 
+  const navBadges = {
+    '/timeoff': pendingTimeOffCount > 0 ? pendingTimeOffCount : null,
+    '/admin': pendingUsersCount > 0 ? pendingUsersCount : null,
+  }
+
   return (
     <div className="min-h-screen bg-bar-dark">
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
@@ -62,11 +99,17 @@ export default function Layout({ user, onLogout }) {
           {allNavItems.map((item) => (
             <NavLink key={item.path} to={item.path} onClick={() => setSidebarOpen(false)}
               className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-lg transition ${isActive ? 'bg-bar-accent text-white' : 'text-gray-400 hover:bg-bar-blue hover:text-white'}`}>
-              <item.icon className="w-5 h-5" />{item.name}
+              <item.icon className="w-5 h-5" />
+              <span className="flex-1">{item.name}</span>
+              {navBadges[item.path] && (
+                <span className="ml-auto text-xs bg-bar-accent rounded-full px-1.5 py-0.5 font-semibold leading-none text-white">
+                  {navBadges[item.path]}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
-        
+
         {/* User info & logout */}
         {user && (
           <div className="absolute bottom-0 left-0 right-0 border-t border-bar-blue p-4 bg-bar-card">
@@ -112,7 +155,15 @@ export default function Layout({ user, onLogout }) {
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bar-card border-t border-bar-blue flex justify-around py-3 pb-safe-nav z-40 print:hidden">
         {allNavItems.slice(0, 5).map((item) => (
           <NavLink key={item.path} to={item.path} className={({ isActive }) => `flex flex-1 flex-col items-center justify-center gap-1 min-h-touch ${isActive ? 'text-bar-accent' : 'text-gray-500'}`}>
-            <item.icon className="w-5 h-5" /><span className="text-xs">{item.name}</span>
+            <div className="relative">
+              <item.icon className="w-5 h-5" />
+              {navBadges[item.path] && (
+                <span className="absolute -top-1.5 -right-2 text-[9px] bg-red-500 text-white rounded-full px-1 leading-tight font-bold min-w-[14px] text-center">
+                  {navBadges[item.path]}
+                </span>
+              )}
+            </div>
+            <span className="text-xs">{item.name}</span>
           </NavLink>
         ))}
       </nav>

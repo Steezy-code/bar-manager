@@ -132,18 +132,19 @@ export default function TimeOff() {
       return
     }
 
+    setPending(current => current.filter(p => p.id !== request.id))
+    setApproved(current => [{ ...request, status: 'approved' }, ...current])
     try {
       const { error } = await supabase
         .from(TABLES.TIME_OFF)
         .update({ status: 'approved' })
         .eq('id', request.id)
       if (error) throw error
-
-      setPending(current => current.filter(p => p.id !== request.id))
-      setApproved(current => [{ ...request, status: 'approved' }, ...current])
       notify('Request approved.', 'success')
     } catch (err) {
       console.error('Error approving request:', err)
+      setPending(current => [request, ...current])
+      setApproved(current => current.filter(a => a.id !== request.id))
       notify('Failed to approve request in database.', 'error')
     }
   }
@@ -312,7 +313,14 @@ export default function TimeOff() {
             <input placeholder="Dates (e.g., March 15-17)" className="input" value={newTimeOff.dates} onChange={e => setNewTimeOff({ ...newTimeOff, dates: e.target.value })} required />
             <input placeholder="Day numbers (e.g., 15,16,17)" className="input" value={newTimeOff.days} onChange={e => setNewTimeOff({ ...newTimeOff, days: e.target.value })} required />
             <div className="flex gap-2">
-              <select className="input flex-1" value={Number(newTimeOff.month) + 1} onChange={e => setNewTimeOff({ ...newTimeOff, month: parseInt(e.target.value, 10) - 1 })}>
+              <select className="input flex-1" value={Number(newTimeOff.month) + 1} onChange={e => {
+                  const newMonth = parseInt(e.target.value, 10) - 1
+                  const prevMonth = Number(newTimeOff.month)
+                  let newYear = newTimeOff.year
+                  if (prevMonth === 11 && newMonth === 0) newYear = newTimeOff.year + 1
+                  if (prevMonth === 0 && newMonth === 11) newYear = newTimeOff.year - 1
+                  setNewTimeOff({ ...newTimeOff, month: newMonth, year: newYear })
+                }}>
                 {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((month, index) => (
                   <option key={month} value={index + 1}>{month}</option>
                 ))}
