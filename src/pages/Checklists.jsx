@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
-import { CheckCircleIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { CheckCircleIcon, PlusIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { supabase } from '../lib/supabase'
 import { TABLES } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { useNotifications } from '../components/Notifications'
+import Modal from '../components/Modal'
+import IconButton from '../components/IconButton'
+import { SkeletonList } from '../components/Skeleton'
 
 const defaultTasks = {
   opening: [{id:1,t:'Check walk-in temps',c:false},{id:2,t:'Count drawer cash',c:false},{id:3,t:'Stock condiments',c:false}],
@@ -254,9 +257,7 @@ export default function Checklists() {
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">Checklists</h1>
         </div>
-        <div className="card">
-          <div className="text-gray-400">Loading checklists...</div>
-        </div>
+        <SkeletonList rows={5} />
       </div>
     )
   }
@@ -272,21 +273,23 @@ export default function Checklists() {
           )}
         </div>
       </div>
-      <div className="flex gap-2 overflow-x-auto flex-wrap">
+      {/* Horizontal scroll-snap selector — comfortable taps, no wrap/overflow jank on mobile */}
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 snap-x snap-mandatory scrollbar-none">
         {Object.keys(tasks).map(t => (
-          <div key={t} className="flex items-center">
-            <button 
-              onClick={() => setList(t)} 
-              className={`px-4 py-2 rounded-l-lg ${list===t?'bg-bar-accent':'bg-bar-card'}`}
+          <div key={t} className="flex shrink-0 snap-start items-stretch">
+            <button
+              onClick={() => setList(t)}
+              className={`min-h-touch rounded-l-lg px-4 font-medium capitalize transition active:scale-[0.97] ${list===t?'bg-bar-accent text-white':'bg-bar-card text-gray-300'} ${!(Object.keys(tasks).length > 1 && hasRole('manager')) ? 'rounded-r-lg' : ''}`}
             >
               {t}
             </button>
             {Object.keys(tasks).length > 1 && hasRole('manager') && (
-              <button 
-                onClick={() => deleteList(t)} 
-                className="px-2 py-2 rounded-r-lg bg-red-600 text-white hover:bg-red-500"
+              <button
+                onClick={() => deleteList(t)}
+                aria-label={`Delete ${t} list`}
+                className="flex min-h-touch items-center rounded-r-lg bg-red-600 px-3 text-white hover:bg-red-500 active:scale-95"
               >
-                ×
+                <XMarkIcon className="h-4 w-4" />
               </button>
             )}
           </div>
@@ -310,8 +313,8 @@ export default function Checklists() {
               placeholder="Add task..." 
               onKeyDown={e => e.key === 'Enter' && addT()}
             />
-            <button onClick={addT} className="btn-primary">
-              <PlusIcon className="w-4 h-4"/>
+            <button onClick={addT} className="btn-primary" aria-label="Add task">
+              <PlusIcon className="w-5 h-5"/>
             </button>
           </div>
         )}
@@ -338,32 +341,27 @@ export default function Checklists() {
                 )}
               </div>
               {edit && (
-                <button onClick={() => delT(t.id)} className="text-red-500">
-                  <TrashIcon className="w-4 h-4"/>
-                </button>
+                <IconButton icon={TrashIcon} label="Delete task" tone="danger" onClick={() => delT(t.id)} />
               )}
             </div>
           ))}
         </div>
         <button onClick={() => save(tasks)} className="btn-primary w-full mt-4">Save</button>
       </div>
-      {showNew && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-bar-card p-6 rounded-xl w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">New List</h2>
-            <input 
-              value={newL} 
-              onChange={e => setNewL(e.target.value)} 
-              className="input mb-4" 
-              placeholder="Name..." 
-            />
-            <div className="flex gap-2">
-              <button onClick={() => setShowNew(false)} className="btn-secondary flex-1">Cancel</button>
-              <button onClick={addL} className="btn-primary flex-1">Create</button>
-            </div>
-          </div>
+      <Modal open={showNew} onClose={() => setShowNew(false)} title="New List">
+        <input
+          value={newL}
+          onChange={e => setNewL(e.target.value)}
+          className="input mb-4"
+          placeholder="Name…"
+          onKeyDown={e => e.key === 'Enter' && addL()}
+          autoFocus
+        />
+        <div className="flex gap-2">
+          <button onClick={() => setShowNew(false)} className="btn-secondary flex-1">Cancel</button>
+          <button onClick={addL} className="btn-primary flex-1">Create</button>
         </div>
-      )}
+      </Modal>
     </div>
   )
 }

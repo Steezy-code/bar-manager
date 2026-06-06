@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="112" fill="#1a1a2e"/>
+  <!-- Cocktail glass -->
+  <g fill="none" stroke="#e94560" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M136 156 L376 156 L256 296 Z"/>
+    <line x1="256" y1="296" x2="256" y2="388"/>
+    <line x1="196" y1="388" x2="316" y2="388"/>
+  </g>
+  <!-- Olive garnish -->
+  <circle cx="300" cy="196" r="18" fill="#a3c644"/>
+</svg>

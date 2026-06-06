@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { HomeIcon, CubeIcon, CalendarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, Cog6ToothIcon, Bars3Icon, XMarkIcon, UserIcon, ArrowRightOnRectangleIcon, ShieldCheckIcon } from '@heroicons/react/24/outline'
+import { HomeIcon, CubeIcon, CalendarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, Cog6ToothIcon, Bars3Icon, XMarkIcon, UserIcon, ArrowRightOnRectangleIcon, ShieldCheckIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
+import { usePullToRefresh } from '../hooks/usePullToRefresh'
 
 const navItems = [
   { name: 'Dashboard', path: '/', icon: HomeIcon },
@@ -18,6 +19,13 @@ export default function Layout({ user, onLogout }) {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const { hasRole, isApproved } = usePermissions()
+
+  // Pull-to-refresh: tells the active page to re-fetch (pages opt in via useAppRefresh).
+  const { distance, refreshing, pulling } = usePullToRefresh(async () => {
+    window.dispatchEvent(new Event('app:refresh'))
+    // Brief delay so the spinner is perceptible even on fast refetches.
+    await new Promise((r) => setTimeout(r, 600))
+  })
 
   const handleLogout = async () => {
     if (onLogout) {
@@ -87,11 +95,23 @@ export default function Layout({ user, onLogout }) {
           <h1 className="text-lg font-bold text-bar-accent">BarManager</h1>
           <div className="w-6" />
         </header>
-        <main className="p-4 pb-24 lg:p-8 print:p-2"><Outlet /></main>
+        {/* Pull-to-refresh indicator (touch only) */}
+        {(pulling || refreshing) && (
+          <div
+            className="flex items-center justify-center overflow-hidden text-bar-accent lg:hidden print:hidden"
+            style={{ height: refreshing ? 48 : distance }}
+          >
+            <ArrowPathIcon
+              className={`h-6 w-6 ${refreshing ? 'animate-spin' : ''}`}
+              style={{ transform: refreshing ? undefined : `rotate(${distance * 3}deg)` }}
+            />
+          </div>
+        )}
+        <main className="p-4 pb-28 lg:p-8 lg:pb-8 print:p-2"><Outlet /></main>
       </div>
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bar-card border-t border-bar-blue flex justify-around py-3 z-40 print:hidden">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bar-card border-t border-bar-blue flex justify-around py-3 pb-safe-nav z-40 print:hidden">
         {allNavItems.slice(0, 5).map((item) => (
-          <NavLink key={item.path} to={item.path} className={({ isActive }) => `flex flex-col items-center gap-1 ${isActive ? 'text-bar-accent' : 'text-gray-500'}`}>
+          <NavLink key={item.path} to={item.path} className={({ isActive }) => `flex flex-1 flex-col items-center justify-center gap-1 min-h-touch ${isActive ? 'text-bar-accent' : 'text-gray-500'}`}>
             <item.icon className="w-5 h-5" /><span className="text-xs">{item.name}</span>
           </NavLink>
         ))}
