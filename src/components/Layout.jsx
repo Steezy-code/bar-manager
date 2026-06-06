@@ -133,7 +133,7 @@ export default function Layout({ user, onLogout }) {
         )}
       </div>
       <div className="lg:ml-64 print:ml-0">
-        <header className="lg:hidden flex items-center justify-between p-4 bg-bar-card border-b border-bar-blue print:hidden">
+        <header className="lg:hidden flex items-center justify-between px-4 pb-4 pt-safe-app bg-bar-card border-b border-bar-blue print:hidden">
           <button onClick={() => setSidebarOpen(true)}><Bars3Icon className="w-6 h-6" /></button>
           <h1 className="text-lg font-bold text-bar-accent">BarManager</h1>
           <div className="w-6" />
@@ -150,9 +150,9 @@ export default function Layout({ user, onLogout }) {
             />
           </div>
         )}
-        <main className="p-4 pb-28 lg:p-8 lg:pb-8 print:p-2"><Outlet /></main>
+        <main className="px-4 pt-4 pb-safe-content lg:p-8 lg:pb-8 print:p-2"><Outlet /></main>
       </div>
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bar-card border-t border-bar-blue flex justify-around py-3 pb-safe-nav z-40 print:hidden">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bar-card border-t border-bar-blue flex justify-around pt-3 pb-safe-nav z-40 print:hidden">
         {allNavItems.slice(0, 5).map((item) => (
           <NavLink key={item.path} to={item.path} className={({ isActive }) => `flex flex-1 flex-col items-center justify-center gap-1 min-h-touch ${isActive ? 'text-bar-accent' : 'text-gray-500'}`}>
             <div className="relative">

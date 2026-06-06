@@ -201,7 +201,9 @@ input, select, textarea {
   .pt-safe { padding-top: env(safe-area-inset-top); }
   .pl-safe { padding-left: env(safe-area-inset-left); }
   .pr-safe { padding-right: env(safe-area-inset-right); }
-  .pb-safe-nav { padding-bottom: calc(env(safe-area-inset-bottom) + 1rem); }
+  .pt-safe-app { padding-top: calc(env(safe-area-inset-top) + 0.75rem); }
+  .pb-safe-nav { padding-bottom: calc(env(safe-area-inset-bottom) + 1.25rem); }
+  .pb-safe-content { padding-bottom: calc(env(safe-area-inset-bottom) + 8rem); }
 
   /* Hide scrollbars on horizontal scroll-snap rows (selectors, week view). */
   .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
