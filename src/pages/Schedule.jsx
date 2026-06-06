@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { PlusIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 import { supabase } from '../lib/supabase'
 import { TABLES } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -102,6 +102,7 @@ export default function Schedule() {
   const [showCopyWeek, setShowCopyWeek] = useState(false)
   const [showScheduleBuilder, setShowScheduleBuilder] = useState(false)
   const [builderShifts, setBuilderShifts] = useState([])
+  const [expandedBuilderGroups, setExpandedBuilderGroups] = useState({})
   const [builderReview, setBuilderReview] = useState(null)
   const [scheduleIssues, setScheduleIssues] = useState(null)
   const [selectedDay, setSelectedDay] = useState(null)
@@ -210,6 +211,14 @@ export default function Schedule() {
 
   const getStaffNameFromProfile = (staffId, fallbackName = '') => {
     return staffNameMap.get(staffId) || fallbackName || 'Unknown'
+  }
+
+  const getBuilderStaffName = (shift) => getStaffNameFromProfile(shift.staffId, shift.name)
+
+  const getBuilderGroupKey = (shift) => {
+    if (shift.staffId) return `staff:${shift.staffId}`
+    const name = normalizeName(shift.name)
+    return name ? `name:${name}` : 'unassigned'
   }
 
   const getStaffIdFromProfile = (staffId) => {
@@ -347,6 +356,18 @@ export default function Schedule() {
     setBuilderShifts(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s))
   }
 
+  const toggleBuilderGroup = (key) => {
+    setExpandedBuilderGroups(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  const expandAllBuilderGroups = () => {
+    setExpandedBuilderGroups(Object.fromEntries(builderShiftGroups.map(group => [group.key, true])))
+  }
+
+  const collapseAllBuilderGroups = () => {
+    setExpandedBuilderGroups({})
+  }
+
   const copyLastMonth = () => {
     const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1
     const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear
@@ -406,6 +427,46 @@ export default function Schedule() {
     setShowPatternModal(false)
     notify(`Added ${newShifts.length} shifts for ${staffProfile.full_name}.`, 'success')
   }
+
+  const builderShiftGroups = useMemo(() => {
+    const groups = new Map()
+
+    builderShifts.forEach((shift, index) => {
+      const key = getBuilderGroupKey(shift)
+      const name = getBuilderStaffName(shift)
+      if (!groups.has(key)) {
+        groups.set(key, { key, name, firstIndex: index, shifts: [] })
+      }
+      groups.get(key).shifts.push(shift)
+    })
+
+    return Array.from(groups.values())
+      .map(group => {
+        const sortedShifts = [...group.shifts].sort((a, b) => (
+          Number(a.day || 0) - Number(b.day || 0) ||
+          String(a.start || '').localeCompare(String(b.start || ''))
+        ))
+        const days = sortedShifts.map(shift => Number(shift.day)).filter(Number.isFinite)
+        const roleTimeCombos = [...new Set(sortedShifts.map(shift => (
+          `${shift.role || 'staff'} ${formatTime12(shift.start)}-${formatTime12(shift.end)}`
+        )))]
+
+        return {
+          ...group,
+          shifts: sortedShifts,
+          sortName: normalizeName(group.name) || `zz-${group.firstIndex}`,
+          daySummary: days.length
+            ? days.length === 1
+              ? `Day ${days[0]}`
+              : `Days ${Math.min(...days)}-${Math.max(...days)}`
+            : 'No days',
+          roleTimeSummary: roleTimeCombos.length <= 2
+            ? roleTimeCombos.join(', ')
+            : `${roleTimeCombos.length} shift types`
+        }
+      })
+      .sort((a, b) => a.sortName.localeCompare(b.sortName) || a.firstIndex - b.firstIndex)
+  }, [builderShifts, staffNameMap])
 
   const generateSchedule = async () => {
     if (!hasRole('manager')) {
@@ -1350,26 +1411,62 @@ export default function Schedule() {
               <button onClick={addEmptyShift} className="btn-primary text-sm">Add Shift</button>
               <button onClick={() => setShowPatternModal(true)} className="btn-secondary text-sm">Add Pattern</button>
               <button onClick={copyLastMonth} className="btn-secondary text-sm">Copy Last Month</button>
-              <button onClick={() => setBuilderShifts([])} className="btn-secondary text-sm text-red-400">Clear All</button>
+              <button onClick={() => { setBuilderShifts([]); setExpandedBuilderGroups({}) }} className="btn-secondary text-sm text-red-400">Clear All</button>
             </div>
             
-            {builderShifts.length > 0 && (
-              <div className="grid grid-cols-[40px_1fr_auto_80px_32px] gap-1 mb-1 px-1">
-                <span className="text-[10px] text-gray-500 font-semibold uppercase">Day</span>
-                <span className="text-[10px] text-gray-500 font-semibold uppercase">Staff</span>
-                <span className="text-[10px] text-gray-500 font-semibold uppercase">Time</span>
-                <span className="text-[10px] text-gray-500 font-semibold uppercase">Role</span>
-                <span />
+            {builderShiftGroups.length > 1 && (
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-bar-blue/10 px-3 py-2 text-sm">
+                <span className="text-gray-300">{builderShiftGroups.length} employees, {builderShifts.length} shifts</span>
+                <div className="flex gap-2">
+                  <button onClick={expandAllBuilderGroups} className="text-bar-accent hover:text-white">Expand all</button>
+                  <span className="text-gray-600">/</span>
+                  <button onClick={collapseAllBuilderGroups} className="text-bar-accent hover:text-white">Collapse all</button>
+                </div>
               </div>
             )}
-            <div className="space-y-1.5 mb-6 overflow-x-auto">
-              {builderShifts.length === 0 ? (
+
+            <div className="space-y-3 mb-6">
+              {builderShiftGroups.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">
                   No shifts added yet. Click "Add Shift" to start.
                 </div>
               ) : (
-                builderShifts.map(shift => (
-                  <div key={shift.id} className="grid grid-cols-[40px_1fr_auto_80px_32px] gap-1 items-center bg-bar-blue/10 rounded-lg px-1.5 py-1 border border-bar-blue/20 min-w-[520px]">
+                builderShiftGroups.map(group => (
+                  <div key={group.key} className="rounded-lg border border-bar-blue/30 bg-bar-blue/10">
+                    <button
+                      type="button"
+                      onClick={() => toggleBuilderGroup(group.key)}
+                      className="flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-bar-blue/20"
+                    >
+                      {expandedBuilderGroups[group.key] ? (
+                        <ChevronDownIcon className="h-5 w-5 shrink-0 text-bar-accent" />
+                      ) : (
+                        <ChevronRightIcon className="h-5 w-5 shrink-0 text-bar-accent" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span className="font-semibold">{group.name}</span>
+                          <span className="rounded-full bg-bar-card px-2 py-0.5 text-xs text-gray-300">
+                            {group.shifts.length} {group.shifts.length === 1 ? 'shift' : 'shifts'}
+                          </span>
+                        </div>
+                        <div className="mt-1 text-xs text-gray-400">
+                          {group.daySummary} · {group.roleTimeSummary}
+                        </div>
+                      </div>
+                    </button>
+
+                    {expandedBuilderGroups[group.key] && (
+                      <div className="space-y-1.5 border-t border-bar-blue/30 p-2 overflow-x-auto">
+                        <div className="grid grid-cols-[40px_1fr_auto_80px_32px] gap-1 px-1 min-w-[520px]">
+                          <span className="text-[10px] text-gray-500 font-semibold uppercase">Day</span>
+                          <span className="text-[10px] text-gray-500 font-semibold uppercase">Staff</span>
+                          <span className="text-[10px] text-gray-500 font-semibold uppercase">Time</span>
+                          <span className="text-[10px] text-gray-500 font-semibold uppercase">Role</span>
+                          <span />
+                        </div>
+                        {group.shifts.map(shift => (
+                  <div key={shift.id} className="grid grid-cols-[40px_1fr_auto_80px_32px] gap-1 items-center bg-bar-card/60 rounded-lg px-1.5 py-1 min-w-[520px]">
                     {/* Day */}
                     <select
                       className="input py-1 px-1 text-sm w-full"
@@ -1434,6 +1531,10 @@ export default function Schedule() {
 
                     {/* Delete */}
                     <IconButton icon={TrashIcon} label="Remove shift" tone="danger" onClick={() => removeShift(shift.id)} />
+                  </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))
               )}
