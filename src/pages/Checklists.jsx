@@ -201,7 +201,7 @@ export default function Checklists() {
   const addT = () => { 
     if(!newT) return
     const currentTasks = tasks[list] || []
-    const updated = {...tasks, [list]: [...currentTasks,{id:Date.now(),t:newT,c:false}]}
+    const updated = {...tasks, [list]: [...currentTasks,{id:crypto.randomUUID(),t:newT,c:false}]}
     save(updated)
     setNewT('')
   }

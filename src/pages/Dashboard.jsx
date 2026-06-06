@@ -50,78 +50,60 @@ export default function Dashboard() {
   const [optionalErrors, setOptionalErrors] = useState({})
   const [greeting, setGreeting] = useState(getGreeting())
   const [loading, setLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   const fetchDashboard = useCallback(async () => {
-    setLoading(true)
+    if (!loading) setIsRefreshing(true)
+    else setLoading(true)
+
+    const [invResult, shiftsResult, checklistResult, timeOffResult] = await Promise.allSettled([
+      canManageInventory
+        ? supabase.from(TABLES.INVENTORY).select('*').order('name', { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
+      supabase.from(TABLES.SHIFTS).select('*').eq('date', formatToday()).order('start_time', { ascending: true }),
+      supabase.from(TABLES.CHECKLISTS).select('tasks').eq('team_id', 'main').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      canReviewRequests
+        ? supabase.from(TABLES.TIME_OFF).select('*').eq('status', 'pending').order('created_at', { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+    ])
+
     const errors = {}
 
-    if (canManageInventory) {
-      try {
-        const { data, error } = await supabase
-          .from(TABLES.INVENTORY)
-          .select('*')
-          .order('name', { ascending: true })
-        if (error) throw error
-        setLowItems((data || []).filter(i => Number(i.quantity || 0) <= Number(i.threshold || 5)))
-      } catch (err) {
-        console.error('Error fetching inventory for dashboard:', err)
-        errors.inventory = true
-        setLowItems([])
-      }
+    if (invResult.status === 'fulfilled' && !invResult.value.error) {
+      setLowItems((invResult.value.data || []).filter(i => Number(i.quantity || 0) <= Number(i.threshold || 5)))
     } else {
+      if (invResult.status === 'rejected' || invResult.value?.error) console.error('Dashboard inventory error:', invResult.reason || invResult.value?.error)
+      errors.inventory = true
       setLowItems([])
     }
 
-    try {
-      const { data, error } = await supabase
-        .from(TABLES.SHIFTS)
-        .select('*')
-        .eq('date', formatToday())
-        .order('start_time', { ascending: true })
-      if (error) throw error
-      setTodayShifts(data || [])
-    } catch (err) {
-      console.error('Error fetching today shifts:', err)
+    if (shiftsResult.status === 'fulfilled' && !shiftsResult.value.error) {
+      setTodayShifts(shiftsResult.value.data || [])
+    } else {
+      console.error('Dashboard shifts error:', shiftsResult.reason || shiftsResult.value?.error)
       errors.shifts = true
       setTodayShifts([])
     }
 
-    try {
-      const { data, error } = await supabase
-        .from(TABLES.CHECKLISTS)
-        .select('tasks')
-        .eq('team_id', 'main')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      if (error) throw error
-      setChecklistStatus(countTasks(data?.tasks || {}))
-    } catch (err) {
-      console.error('Error fetching checklist status:', err)
+    if (checklistResult.status === 'fulfilled' && !checklistResult.value.error) {
+      setChecklistStatus(countTasks(checklistResult.value.data?.tasks || {}))
+    } else {
+      console.error('Dashboard checklist error:', checklistResult.reason || checklistResult.value?.error)
       errors.checklists = true
       setChecklistStatus({ completed: 0, total: 0 })
     }
 
-    if (canReviewRequests) {
-      try {
-        const { data, error } = await supabase
-          .from(TABLES.TIME_OFF)
-          .select('*')
-          .eq('status', 'pending')
-          .order('created_at', { ascending: false })
-        if (error) throw error
-        setPendingRequests(data || [])
-      } catch (err) {
-        console.error('Error fetching pending time off:', err)
-        errors.timeOff = true
-        setPendingRequests([])
-      }
+    if (timeOffResult.status === 'fulfilled' && !timeOffResult.value.error) {
+      setPendingRequests(timeOffResult.value.data || [])
     } else {
+      if (canReviewRequests) console.error('Dashboard time-off error:', timeOffResult.reason || timeOffResult.value?.error)
+      errors.timeOff = true
       setPendingRequests([])
     }
 
     setOptionalErrors(errors)
     setLoading(false)
+    setIsRefreshing(false)
   }, [canManageInventory, canReviewRequests])
 
   useEffect(() => {
@@ -161,7 +143,7 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold">{greeting}</h1>
           <p className="text-gray-400">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
         </div>
-        <button onClick={fetchDashboard} className="btn-secondary self-start text-sm md:self-auto">Refresh</button>
+        <button onClick={fetchDashboard} disabled={isRefreshing} className="btn-secondary self-start text-sm md:self-auto">{isRefreshing ? 'Refreshing…' : 'Refresh'}</button>
       </div>
 
       {hasOptionalErrors && (

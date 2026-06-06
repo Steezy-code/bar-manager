@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { TABLES } from '../lib/supabase';
 
@@ -10,6 +10,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const lastFetchedUserIdRef = useRef(null);
 
   // Fetch user profile from profiles table
   const fetchProfile = async (userId) => {
@@ -33,11 +34,11 @@ export const AuthProvider = ({ children }) => {
 
   // Auth state change listener
   useEffect(() => {
-    // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       const user = session?.user ?? null;
       setUser(user);
       if (user) {
+        lastFetchedUserIdRef.current = user.id;
         fetchProfile(user.id);
       } else {
         setProfile(null);
@@ -49,8 +50,12 @@ export const AuthProvider = ({ children }) => {
       const user = session?.user ?? null;
       setUser(user);
       if (user) {
-        fetchProfile(user.id);
+        if (user.id !== lastFetchedUserIdRef.current) {
+          lastFetchedUserIdRef.current = user.id;
+          fetchProfile(user.id);
+        }
       } else {
+        lastFetchedUserIdRef.current = null;
         setProfile(null);
       }
       setLoading(false);
