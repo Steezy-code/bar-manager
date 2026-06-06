@@ -13,6 +13,12 @@ import { TABLES } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { useNotifications } from '../components/Notifications'
+import Modal from '../components/Modal'
+import IconButton from '../components/IconButton'
+import EmptyState from '../components/EmptyState'
+import { SkeletonGrid } from '../components/Skeleton'
+import { useAppRefresh } from '../hooks/usePullToRefresh'
+import { CubeIcon, XMarkIcon, MinusIcon } from '@heroicons/react/24/outline'
 
 const DEFAULT_CATEGORY = 'drinks'
 const CSV_HEADERS = ['name', 'quantity', 'unit', 'threshold', 'category']
@@ -140,6 +146,8 @@ export default function Inventory() {
   useEffect(() => {
     fetchItems()
   }, [fetchItems])
+
+  useAppRefresh(fetchItems)
 
   const update = async (id, delta) => {
     if (!canManageInventory) return
@@ -476,9 +484,9 @@ export default function Inventory() {
       <div className="space-y-6 pb-24 lg:pb-0">
         <div>
           <h1 className="text-2xl font-bold">Inventory</h1>
-          <p className="text-gray-400">Loading...</p>
+          <p className="text-gray-400">Loading…</p>
         </div>
-        <div className="flex h-64 items-center justify-center text-gray-400">Loading inventory...</div>
+        <SkeletonGrid count={6} />
       </div>
     )
   }
@@ -515,7 +523,7 @@ export default function Inventory() {
                 {importReport.lines.map((line, index) => <li key={`${line}-${index}`}>{line}</li>)}
               </ul>
             </div>
-            <button type="button" onClick={() => setImportReport(null)} className="rounded px-2 py-1 text-gray-300 hover:bg-bar-blue hover:text-white">x</button>
+            <IconButton icon={XMarkIcon} label="Dismiss import report" onClick={() => setImportReport(null)} className="-mr-2 -mt-2" />
           </div>
         </div>
       )}
@@ -566,19 +574,15 @@ export default function Inventory() {
                   {isLow && <p className="text-xs text-red-400">Low stock (min: {i.threshold})</p>}
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => setEditingItem({ ...i, category: i.category || DEFAULT_CATEGORY })} className="rounded p-1 text-gray-300 hover:bg-bar-blue hover:text-white" aria-label={`Edit ${i.name}`}>
-                    <PencilSquareIcon className="h-4 w-4" />
-                  </button>
-                  <button onClick={() => remove(i.id)} className="rounded p-1 text-red-500 hover:bg-red-500/20" aria-label={`Remove ${i.name}`}>
-                    <TrashIcon className="h-4 w-4" />
-                  </button>
+                  <IconButton icon={PencilSquareIcon} label={`Edit ${i.name}`} onClick={() => setEditingItem({ ...i, category: i.category || DEFAULT_CATEGORY })} />
+                  <IconButton icon={TrashIcon} label={`Remove ${i.name}`} tone="danger" onClick={() => remove(i.id)} />
                 </div>
               </div>
               <div className="mt-3 flex items-center">
-                <button onClick={() => update(i.id, -1)} className="h-9 w-9 rounded bg-bar-blue text-lg">-</button>
-                <span className="mx-3 font-bold">{i.quantity}</span>
-                <button onClick={() => update(i.id, 1)} className="h-9 w-9 rounded bg-bar-blue text-lg">+</button>
-                <span className="ml-2 text-sm text-gray-400">{i.unit}</span>
+                <button onClick={() => update(i.id, -1)} className="flex h-11 w-11 items-center justify-center rounded-lg bg-bar-blue active:scale-90" aria-label={`Decrease ${i.name}`}><MinusIcon className="h-5 w-5" /></button>
+                <span className="mx-4 text-lg font-bold tabular-nums">{i.quantity}</span>
+                <button onClick={() => update(i.id, 1)} className="flex h-11 w-11 items-center justify-center rounded-lg bg-bar-blue active:scale-90" aria-label={`Increase ${i.name}`}><PlusIcon className="h-5 w-5" /></button>
+                <span className="ml-3 text-sm text-gray-400">{i.unit}</span>
               </div>
             </div>
           )
@@ -586,56 +590,57 @@ export default function Inventory() {
       </div>
 
       {filteredItems.length === 0 && (
-        <div className="py-8 text-center text-gray-400">No inventory items match those filters.</div>
+        <EmptyState
+          icon={CubeIcon}
+          title="No items to show"
+          message={items.length === 0 ? 'Add your first inventory item to get started.' : 'No inventory items match those filters.'}
+          action={items.length === 0 ? <button onClick={() => setShowAdd(true)} className="btn-primary"><PlusIcon className="h-5 w-5" /> Add item</button> : null}
+        />
       )}
 
-      {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <form onSubmit={add} className="w-full max-w-md space-y-3 rounded-xl bg-bar-card p-6">
-            <h2 className="text-xl font-bold">Add Item</h2>
-            <input placeholder="Name" className="input" value={newItem.name} onChange={e => setNewItem({ ...newItem, name: e.target.value })} required />
-            {categorySupported && (
-              <input placeholder="Category" className="input" value={newItem.category} onChange={e => setNewItem({ ...newItem, category: e.target.value })} />
-            )}
-            <div className="grid grid-cols-2 gap-2">
-              <input type="number" min="0" placeholder="Qty" className="input" value={newItem.quantity} onChange={e => setNewItem({ ...newItem, quantity: e.target.value })} required />
-              <input placeholder="Unit" className="input" value={newItem.unit} onChange={e => setNewItem({ ...newItem, unit: e.target.value })} required />
-            </div>
-            <div>
-              <label className="text-sm text-gray-400">Low stock alert when qty is at or below</label>
-              <input type="number" min="0" className="input" value={newItem.threshold} onChange={e => setNewItem({ ...newItem, threshold: e.target.value })} />
-            </div>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setShowAdd(false)} className="btn-secondary flex-1">Cancel</button>
-              <button className="btn-primary flex-1">Add</button>
-            </div>
-          </form>
-        </div>
-      )}
+      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add Item">
+        <form onSubmit={add} className="space-y-3">
+          <input placeholder="Name" className="input" value={newItem.name} onChange={e => setNewItem({ ...newItem, name: e.target.value })} required />
+          {categorySupported && (
+            <input placeholder="Category" className="input" value={newItem.category} onChange={e => setNewItem({ ...newItem, category: e.target.value })} />
+          )}
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <input type="number" min="0" placeholder="Qty" className="input" value={newItem.quantity} onChange={e => setNewItem({ ...newItem, quantity: e.target.value })} required />
+            <input placeholder="Unit" className="input" value={newItem.unit} onChange={e => setNewItem({ ...newItem, unit: e.target.value })} required />
+          </div>
+          <div>
+            <label className="field-label">Low stock alert when qty is at or below</label>
+            <input type="number" min="0" className="input" value={newItem.threshold} onChange={e => setNewItem({ ...newItem, threshold: e.target.value })} />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button type="button" onClick={() => setShowAdd(false)} className="btn-secondary flex-1">Cancel</button>
+            <button className="btn-primary flex-1">Add</button>
+          </div>
+        </form>
+      </Modal>
 
-      {editingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <form onSubmit={saveEdit} className="w-full max-w-md space-y-3 rounded-xl bg-bar-card p-6">
-            <h2 className="text-xl font-bold">Edit Item</h2>
+      <Modal open={!!editingItem} onClose={() => setEditingItem(null)} title="Edit Item">
+        {editingItem && (
+          <form onSubmit={saveEdit} className="space-y-3">
             <input placeholder="Name" className="input" value={editingItem.name} onChange={e => setEditingItem({ ...editingItem, name: e.target.value })} required />
             {categorySupported && (
               <input placeholder="Category" className="input" value={editingItem.category || DEFAULT_CATEGORY} onChange={e => setEditingItem({ ...editingItem, category: e.target.value })} />
             )}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <input type="number" min="0" placeholder="Qty" className="input" value={editingItem.quantity} onChange={e => setEditingItem({ ...editingItem, quantity: e.target.value })} required />
               <input placeholder="Unit" className="input" value={editingItem.unit || ''} onChange={e => setEditingItem({ ...editingItem, unit: e.target.value })} required />
             </div>
             <div>
-              <label className="text-sm text-gray-400">Low stock alert when qty is at or below</label>
+              <label className="field-label">Low stock alert when qty is at or below</label>
               <input type="number" min="0" className="input" value={editingItem.threshold} onChange={e => setEditingItem({ ...editingItem, threshold: e.target.value })} />
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 pt-2">
               <button type="button" onClick={() => setEditingItem(null)} className="btn-secondary flex-1">Cancel</button>
               <button className="btn-primary flex-1">Save</button>
             </div>
           </form>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   )
 }
