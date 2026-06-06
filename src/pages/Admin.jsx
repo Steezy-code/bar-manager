@@ -2,8 +2,24 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { TABLES } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { PencilIcon, CheckIcon, XMarkIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, CheckIcon, XMarkIcon, TrashIcon, UsersIcon } from '@heroicons/react/24/outline';
 import { useNotifications } from '../components/Notifications';
+import Modal from '../components/Modal';
+import DataCard from '../components/DataCard';
+import EmptyState from '../components/EmptyState';
+import { SkeletonList } from '../components/Skeleton';
+
+const roleBadge = (role) => (
+  <span className={`badge ${role === 'admin' ? 'bg-red-500/30 text-red-300' : role === 'manager' ? 'bg-yellow-500/30 text-yellow-300' : role === 'staff' ? 'bg-green-500/30 text-green-300' : 'bg-gray-500/30 text-gray-300'}`}>
+    {role}
+  </span>
+);
+
+const statusBadge = (status) => (
+  <span className={`badge ${status === 'approved' ? 'bg-green-500/30 text-green-300' : status === 'pending' ? 'bg-yellow-500/30 text-yellow-300' : 'bg-red-500/30 text-red-300'}`}>
+    {status}
+  </span>
+);
 
 export default function Admin() {
   const { profile } = useAuth();
@@ -168,6 +184,45 @@ export default function Admin() {
   const filteredUsers = users.filter(u => showRemoved || u.status !== 'removed');
   const approvedNonRemovedUsers = users.filter(u => u.status === 'approved' && u.id !== profile.id);
 
+  // Role/status selects shown while editing a user (shared by table + cards).
+  const renderEditSelects = (compact = false) => (
+    <>
+      <select value={editRole} onChange={(e) => setEditRole(e.target.value)} className={`select ${compact ? '' : 'flex-1'}`}>
+        {roleOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+      </select>
+      <select value={editStatus} onChange={(e) => setEditStatus(e.target.value)} className={`select ${compact ? '' : 'flex-1'}`}>
+        {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+      </select>
+    </>
+  );
+
+  // Action buttons for a user (shared by table + cards).
+  const renderActions = (user) => (
+    editingId === user.id ? (
+      <>
+        <button onClick={saveEdit} className="btn-primary flex-1 md:flex-none"><CheckIcon className="w-5 h-5" /> Save</button>
+        <button onClick={cancelEdit} className="btn-secondary flex-1 md:flex-none"><XMarkIcon className="w-5 h-5" /> Cancel</button>
+      </>
+    ) : (
+      <>
+        <button onClick={() => startEdit(user)} className="btn-secondary flex-1 md:flex-none"><PencilIcon className="w-5 h-5" /> Edit</button>
+        {user.status === 'pending' && (
+          <button onClick={() => approveUser(user.id)} className="btn-primary flex-1 md:flex-none">Approve</button>
+        )}
+        {user.status !== 'removed' && user.id !== profile.id && (
+          <button
+            onClick={() => removeUser(user.id, user.email)}
+            disabled={isLastActiveAdmin(user.id)}
+            className="btn-secondary flex-1 bg-red-500/20 text-red-300 hover:bg-red-500/30 md:flex-none"
+            title={isLastActiveAdmin(user.id) ? 'Cannot remove the last active admin' : ''}
+          >
+            <TrashIcon className="w-5 h-5" /> Remove
+          </button>
+        )}
+      </>
+    )
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center gap-2">
@@ -185,139 +240,123 @@ export default function Admin() {
         </p>
       </div>
 
-      <div className="flex items-center gap-2 mb-4">
+      <label htmlFor="showRemoved" className="flex items-center gap-3 min-h-touch cursor-pointer">
         <input
           type="checkbox"
           id="showRemoved"
           checked={showRemoved}
           onChange={(e) => setShowRemoved(e.target.checked)}
-          className="rounded"
+          className="h-5 w-5 rounded"
         />
-        <label htmlFor="showRemoved" className="text-sm text-gray-300">
-          Show removed users
-        </label>
-      </div>
+        <span className="text-sm text-gray-300">Show removed users</span>
+      </label>
 
       {loading ? (
-        <div className="text-center py-8">Loading users...</div>
+        <SkeletonList rows={5} />
+      ) : filteredUsers.length === 0 ? (
+        <EmptyState icon={UsersIcon} title="No users found" message="No accounts match the current filter." />
       ) : (
-        <div className="card overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-bar-blue/50">
-              <tr>
-                <th className="p-3 text-left">Email</th>
-                <th className="p-3 text-left">Role</th>
-                <th className="p-3 text-left">Status</th>
-                <th className="p-3 text-left">Created</th>
-                <th className="p-3 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.map((user) => (
-                <tr key={user.id} className="border-b border-bar-blue/30 last:border-0">
-                  <td className="p-3">{user.email}</td>
-                  <td className="p-3">
-                    {editingId === user.id ? (
-                      <select value={editRole} onChange={(e) => setEditRole(e.target.value)} className="input py-1">
-                        {roleOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                      </select>
-                    ) : (
-                      <span className={`px-2 py-1 rounded text-xs font-semibold ${user.role === 'admin' ? 'bg-red-500/30 text-red-300' : user.role === 'manager' ? 'bg-yellow-500/30 text-yellow-300' : user.role === 'staff' ? 'bg-green-500/30 text-green-300' : 'bg-gray-500/30 text-gray-300'}`}>
-                        {user.role}
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-3">
-                    {editingId === user.id ? (
-                      <select value={editStatus} onChange={(e) => setEditStatus(e.target.value)} className="input py-1">
-                        {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                      </select>
-                    ) : (
-                      <span className={`px-2 py-1 rounded text-xs font-semibold ${user.status === 'approved' ? 'bg-green-500/30 text-green-300' : user.status === 'pending' ? 'bg-yellow-500/30 text-yellow-300' : 'bg-red-500/30 text-red-300'}`}>
-                        {user.status}
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-3 text-sm text-gray-400">{new Date(user.created_at).toLocaleDateString()}</td>
-                  <td className="p-3">
-                    {editingId === user.id ? (
-                      <div className="flex gap-2">
-                        <button onClick={saveEdit} className="btn-primary py-1 px-3"><CheckIcon className="w-4 h-4" /></button>
-                        <button onClick={cancelEdit} className="btn-secondary py-1 px-3"><XMarkIcon className="w-4 h-4" /></button>
-                      </div>
-                    ) : (
-                      <div className="flex gap-2">
-                        <button onClick={() => startEdit(user)} className="btn-secondary py-1 px-3"><PencilIcon className="w-4 h-4" /> Edit</button>
-                        {user.status === 'pending' && (
-                          <button onClick={() => approveUser(user.id)} className="btn-primary py-1 px-3">Approve</button>
-                        )}
-                        {user.status !== 'removed' && user.id !== profile.id && (
-                          <button
-                            onClick={() => removeUser(user.id, user.email)}
-                            className={`btn-secondary py-1 px-3 ${isLastActiveAdmin(user.id) ? 'opacity-50 cursor-not-allowed' : 'bg-red-500/20 text-red-300 hover:bg-red-500/30'}`}
-                            title={isLastActiveAdmin(user.id) ? 'Cannot remove the last active admin' : ''}
-                          >
-                            <TrashIcon className="w-4 h-4" /> Remove
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {filteredUsers.length === 0 && (
-            <div className="p-8 text-center text-gray-500">No users found.</div>
-          )}
-        </div>
-      )}
-      {showTransferModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-bar-card p-6 rounded-xl w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Grant Admin Access</h2>
-            <p className="text-gray-400 mb-4">Select an approved user to grant admin privileges. Your admin access stays in place unless you choose to demote yourself.</p>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Target User</label>
-                <select 
-                  className="input w-full"
-                  value={transferTarget}
-                  onChange={(e) => setTransferTarget(e.target.value)}
-                >
-                  <option value="">Select a user...</option>
-                  {approvedNonRemovedUsers
-                    .map(user => (
-                      <option key={user.id} value={user.id}>
-                        {user.email} ({user.role})
-                      </option>
-                    ))
-                  }
-                </select>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="demoteSelf"
-                  checked={demoteSelf}
-                  onChange={(e) => setDemoteSelf(e.target.checked)}
-                  className="rounded"
-                />
-                <label htmlFor="demoteSelf" className="text-sm text-gray-300">
-                  Demote myself to manager after granting access
-                </label>
-              </div>
-            </div>
-            
-            <div className="flex gap-2 mt-6">
-              <button onClick={() => setShowTransferModal(false)} className="btn-secondary flex-1">Cancel</button>
-              <button onClick={handleTransferAdmin} className="btn-primary flex-1">Grant Admin</button>
-            </div>
+        <>
+          {/* Mobile: stacked cards (no horizontal scroll) */}
+          <div className="space-y-3 md:hidden">
+            {filteredUsers.map((user) => (
+              <DataCard
+                key={user.id}
+                title={user.email}
+                fields={
+                  editingId === user.id
+                    ? [{ label: 'Role / Status', value: <div className="flex gap-2">{renderEditSelects(true)}</div> }]
+                    : [
+                        { label: 'Role', value: roleBadge(user.role) },
+                        { label: 'Status', value: statusBadge(user.status) },
+                        { label: 'Created', value: new Date(user.created_at).toLocaleDateString() },
+                      ]
+                }
+                actions={renderActions(user)}
+              />
+            ))}
           </div>
-        </div>
+
+          {/* Desktop: table (overflow-x-auto as a safety net) */}
+          <div className="card hidden overflow-x-auto md:block">
+            <table className="w-full">
+              <thead className="bg-bar-blue/50">
+                <tr>
+                  <th className="p-3 text-left">Email</th>
+                  <th className="p-3 text-left">Role</th>
+                  <th className="p-3 text-left">Status</th>
+                  <th className="p-3 text-left">Created</th>
+                  <th className="p-3 text-left">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUsers.map((user) => (
+                  <tr key={user.id} className="border-b border-bar-blue/30 last:border-0">
+                    <td className="p-3">{user.email}</td>
+                    <td className="p-3">
+                      {editingId === user.id ? (
+                        <select value={editRole} onChange={(e) => setEditRole(e.target.value)} className="select">
+                          {roleOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                        </select>
+                      ) : roleBadge(user.role)}
+                    </td>
+                    <td className="p-3">
+                      {editingId === user.id ? (
+                        <select value={editStatus} onChange={(e) => setEditStatus(e.target.value)} className="select">
+                          {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                        </select>
+                      ) : statusBadge(user.status)}
+                    </td>
+                    <td className="p-3 text-sm text-gray-400">{new Date(user.created_at).toLocaleDateString()}</td>
+                    <td className="p-3">
+                      <div className="flex flex-wrap gap-2">{renderActions(user)}</div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
+      <Modal open={showTransferModal} onClose={() => setShowTransferModal(false)} title="Grant Admin Access">
+        <p className="text-gray-400 mb-4">Select an approved user to grant admin privileges. Your admin access stays in place unless you choose to demote yourself.</p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="field-label">Target User</label>
+            <select
+              className="select"
+              value={transferTarget}
+              onChange={(e) => setTransferTarget(e.target.value)}
+            >
+              <option value="">Select a user...</option>
+              {approvedNonRemovedUsers
+                .map(user => (
+                  <option key={user.id} value={user.id}>
+                    {user.email} ({user.role})
+                  </option>
+                ))
+              }
+            </select>
+          </div>
+
+          <label htmlFor="demoteSelf" className="flex items-center gap-3 min-h-touch cursor-pointer">
+            <input
+              type="checkbox"
+              id="demoteSelf"
+              checked={demoteSelf}
+              onChange={(e) => setDemoteSelf(e.target.checked)}
+              className="h-5 w-5 rounded"
+            />
+            <span className="text-sm text-gray-300">Demote myself to manager after granting access</span>
+          </label>
+        </div>
+
+        <div className="flex gap-2 mt-6">
+          <button onClick={() => setShowTransferModal(false)} className="btn-secondary flex-1">Cancel</button>
+          <button onClick={handleTransferAdmin} className="btn-primary flex-1">Grant Admin</button>
+        </div>
+      </Modal>
     </div>
   );
 }

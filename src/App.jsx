@@ -13,6 +13,20 @@ import PendingApproval from './pages/PendingApproval';
 import Admin from './pages/Admin';
 import Layout from './components/Layout';
 import { NotificationsProvider } from './components/Notifications';
+import { Skeleton } from './components/Skeleton';
+import OfflineIndicator from './components/OfflineIndicator';
+
+// Full-screen loading state with a branded spinner-free skeleton feel.
+const FullScreenLoader = ({ label }) => (
+  <div className="min-h-screen bg-bar-dark flex flex-col items-center justify-center gap-4 p-6">
+    <div className="text-2xl font-bold text-bar-accent">🍻 BarManager</div>
+    <div className="w-full max-w-xs space-y-3">
+      <Skeleton className="h-3 w-full" />
+      <Skeleton className="h-3 w-2/3" />
+    </div>
+    <p className="text-sm text-gray-500">{label}</p>
+  </div>
+);
 
 // Protected wrapper that checks auth, approval status, and role hierarchy
 const ProtectedRoute = ({ children, requiredRole }) => {
@@ -21,7 +35,7 @@ const ProtectedRoute = ({ children, requiredRole }) => {
   const { hasRole, isPending, isRejected } = usePermissions();
 
   if (loading) {
-    return <div className="min-h-screen bg-bar-dark flex items-center justify-center">Loading...</div>;
+    return <FullScreenLoader label="Loading…" />;
   }
 
   if (!user) {
@@ -29,7 +43,7 @@ const ProtectedRoute = ({ children, requiredRole }) => {
   }
 
   if (!profile) {
-    return <div className="min-h-screen bg-bar-dark flex items-center justify-center">Loading profile...</div>;
+    return <FullScreenLoader label="Loading your profile…" />;
   }
 
   if (isPending) {
@@ -97,6 +111,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <NotificationsProvider>
+          <OfflineIndicator />
           <AppRouter />
         </NotificationsProvider>
       </AuthProvider>
