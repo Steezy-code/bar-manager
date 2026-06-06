@@ -108,6 +108,12 @@ export default function Admin() {
       return;
     }
 
+    const targetUser = approvedNonRemovedUsers.find(u => u.id === transferTarget)
+    if (!demoteSelf && targetUser?.role === 'admin') {
+      notify('That user is already an admin.', 'error')
+      return
+    }
+
     try {
       // Update target user to admin
       const { error: targetError } = await supabase

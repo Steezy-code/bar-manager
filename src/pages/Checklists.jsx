@@ -201,7 +201,7 @@ export default function Checklists() {
   const addT = () => { 
     if(!newT) return
     const currentTasks = tasks[list] || []
-    const updated = {...tasks, [list]: [...currentTasks,{id:Date.now(),t:newT,c:false}]}
+    const updated = {...tasks, [list]: [...currentTasks,{id:crypto.randomUUID(),t:newT,c:false}]}
     save(updated)
     setNewT('')
   }
@@ -281,7 +281,17 @@ export default function Checklists() {
               onClick={() => setList(t)}
               className={`min-h-touch rounded-l-lg px-4 font-medium capitalize transition active:scale-[0.97] ${list===t?'bg-bar-accent text-white':'bg-bar-card text-gray-300'} ${!(Object.keys(tasks).length > 1 && hasRole('manager')) ? 'rounded-r-lg' : ''}`}
             >
-              {t}
+              {(() => {
+                const tabTasks = tasks[t] || []
+                const done = tabTasks.filter(task => task.c).length
+                const total = tabTasks.length
+                return (
+                  <span className="flex flex-col items-center leading-tight">
+                    <span className="capitalize">{t}</span>
+                    {total > 0 && <span className="text-[10px] opacity-70">{done}/{total}</span>}
+                  </span>
+                )
+              })()}
             </button>
             {Object.keys(tasks).length > 1 && hasRole('manager') && (
               <button
@@ -320,14 +330,14 @@ export default function Checklists() {
         )}
         <div className="space-y-2">
           {(tasks[list] || []).map(t => (
-            <div 
-              key={t.id} 
-              className={`checklist-item flex items-center gap-3 p-3 rounded-lg ${t.c?'bg-green-500/20':'bg-bar-blue'}`}
+            <div
+              key={t.id}
+              className={`checklist-item flex items-center gap-3 p-3 rounded-lg transition-all duration-200 ${t.c?'bg-green-500/20 scale-[0.99]':'bg-bar-blue scale-100'}`}
             >
               <div onClick={() => toggle(t.id)} className={`flex-1 ${t.c && t.completed_by && t.completed_by !== user?.id && !canOverrideCompletion ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                 <div className="flex items-center gap-3">
                   {t.c ? (
-                    <CheckCircleIcon className="w-6 h-6 text-green-500"/>
+                    <CheckCircleIcon className="w-6 h-6 text-green-500 transition-transform duration-200 scale-110"/>
                   ) : (
                     <div className="w-6 h-6 rounded-full border-2"/>
                   )}
@@ -346,7 +356,6 @@ export default function Checklists() {
             </div>
           ))}
         </div>
-        <button onClick={() => save(tasks)} className="btn-primary w-full mt-4">Save</button>
       </div>
       <Modal open={showNew} onClose={() => setShowNew(false)} title="New List">
         <input

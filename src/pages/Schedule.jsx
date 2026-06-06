@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { PlusIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { supabase } from '../lib/supabase'
 import { TABLES } from '../lib/supabase'
@@ -106,7 +106,11 @@ export default function Schedule() {
   const [scheduleIssues, setScheduleIssues] = useState(null)
   const [selectedDay, setSelectedDay] = useState(null)
   const [profilesList, setProfilesList] = useState([])
+  const [staffNameMap, setStaffNameMap] = useState(new Map())
   const [profilesUnavailable, setProfilesUnavailable] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [isBuilding, setIsBuilding] = useState(false)
+  const [deletingShiftId, setDeletingShiftId] = useState(null)
   const [copyToMonth, setCopyToMonth] = useState(0)
   const [newShift, setNewShift] = useState({ staffId: '', name: '', day: 1, start: '16:00', end: '23:00', role: 'server' })
   const [loading, setLoading] = useState(true)
@@ -188,6 +192,7 @@ export default function Schedule() {
         .order('full_name', { ascending: true })
       if (error) throw error
       setProfilesList(data || [])
+      setStaffNameMap(new Map((data || []).map(p => [p.id, p.full_name || p.email])))
       setProfilesUnavailable(false)
     } catch (err) {
       console.error('Error fetching profiles:', err)
@@ -204,8 +209,7 @@ export default function Schedule() {
   }, [fetchShifts, fetchTimeOff, fetchProfiles])
 
   const getStaffNameFromProfile = (staffId, fallbackName = '') => {
-    const staffProfile = profilesList.find(p => p.id === staffId)
-    return staffProfile?.full_name || staffProfile?.email || fallbackName || 'Unknown'
+    return staffNameMap.get(staffId) || fallbackName || 'Unknown'
   }
 
   const getStaffIdFromProfile = (staffId) => {
@@ -236,11 +240,13 @@ export default function Schedule() {
 
   const findExistingShiftConflicts = (proposedShifts, existingShifts = shifts) => {
     const conflicts = []
-    proposedShifts.forEach(proposed => {
+    const normProposed = proposedShifts.map(s => ({ ...s, _n: normalizeName(s.staff_name) }))
+    const normExisting = existingShifts.map(s => ({ ...s, _n: normalizeName(s.name) }))
+    normProposed.forEach(proposed => {
       const { year, month, day } = parseSupabaseDate(proposed.date)
-      existingShifts.forEach(existing => {
+      normExisting.forEach(existing => {
         if (
-          normalizeName(existing.name) === normalizeName(proposed.staff_name) &&
+          existing._n === proposed._n &&
           existing.year === year &&
           existing.month === month &&
           existing.day === day &&
@@ -260,12 +266,13 @@ export default function Schedule() {
 
   const findInternalShiftConflicts = (proposedShifts) => {
     const conflicts = []
-    for (let i = 0; i < proposedShifts.length; i++) {
-      for (let j = i + 1; j < proposedShifts.length; j++) {
-        const left = proposedShifts[i]
-        const right = proposedShifts[j]
+    const norm = proposedShifts.map(s => ({ ...s, _n: normalizeName(s.staff_name) }))
+    for (let i = 0; i < norm.length; i++) {
+      for (let j = i + 1; j < norm.length; j++) {
+        const left = norm[i]
+        const right = norm[j]
         if (
-          normalizeName(left.staff_name) === normalizeName(right.staff_name) &&
+          left._n === right._n &&
           left.date === right.date &&
           shiftsOverlap(left.start_time, left.end_time, right.start_time, right.end_time)
         ) {
@@ -345,21 +352,24 @@ export default function Schedule() {
     const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear
     const prevShifts = shifts.filter(s => s.year === prevYear && s.month === prevMonth)
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
+    const adjusted = prevShifts.filter(s => s.day > daysInMonth).length
     const mapped = prevShifts.map(s => {
-      // Adjust day if it exceeds days in current month
       const day = s.day > daysInMonth ? daysInMonth : s.day
       return {
         id: `copy-${s.id}-${Date.now()}`,
         staffId: profilesList.find(p => p.full_name === s.name)?.id || '',
         name: s.name,
-        day: day,
+        day,
         start: s.start,
         end: s.end,
         role: s.role || 'staff'
       }
     })
     setBuilderShifts(prev => [...prev, ...mapped])
-    notify(`Added ${mapped.length} shifts from ${months[prevMonth]} ${prevYear}.`, 'success')
+    notify(
+      `Added ${mapped.length} shifts from ${months[prevMonth]} ${prevYear}.${adjusted > 0 ? ` ${adjusted} shift(s) had their day adjusted to fit ${months[currentMonth]}.` : ''}`,
+      'success'
+    )
   }
 
   const updatePatternShift = (field, value) => {
@@ -441,7 +451,7 @@ export default function Schedule() {
   }
 
   const commitGenerateSchedule = async () => {
-    if (!builderReview) return
+    if (!builderReview || isGenerating) return
 
     const confirmed = await confirmAction({
       title: 'Replace month schedule?',
@@ -451,6 +461,7 @@ export default function Schedule() {
     })
     if (!confirmed) return
 
+    setIsGenerating(true)
     try {
       const { error: deleteError } = await supabase
         .from(TABLES.SHIFTS)
@@ -472,6 +483,8 @@ export default function Schedule() {
     } catch (err) {
       console.error('Error generating schedule:', err)
       notify('Failed to generate schedule.', 'error')
+    } finally {
+      setIsGenerating(false)
     }
   }
 
@@ -544,8 +557,8 @@ export default function Schedule() {
     }
   }
 
-  // Delete Shift from Supabase
   const deleteShift = async (id) => {
+    if (deletingShiftId) return
     const confirmed = await confirmAction({
       title: 'Delete shift?',
       message: 'This shift will be removed from the schedule.',
@@ -554,6 +567,7 @@ export default function Schedule() {
     })
     if (!confirmed) return
 
+    setDeletingShiftId(id)
     try {
       const { error } = await supabase
         .from(TABLES.SHIFTS)
@@ -566,6 +580,8 @@ export default function Schedule() {
     } catch (err) {
       console.error('Error deleting shift:', err)
       notify('Failed to delete shift from database.', 'error')
+    } finally {
+      setDeletingShiftId(null)
     }
   }
 
@@ -864,26 +880,20 @@ export default function Schedule() {
   const monthName = getDisplayDate().toLocaleString('default', { month: 'long', year: 'numeric' })
 
   const prevView = () => {
-    if (view === 'week') {
-      setCurrentDate(new Date(currentDate.setDate(currentDate.getDate() - 7)))
-    } else {
-      setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))
-    }
+    const d = new Date(currentDate)
+    if (view === 'week') { d.setDate(d.getDate() - 7) } else { d.setMonth(d.getMonth() - 1) }
+    setCurrentDate(d)
   }
   const nextView = () => {
-    if (view === 'week') {
-      setCurrentDate(new Date(currentDate.setDate(currentDate.getDate() + 7)))
-    } else {
-      setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))
-    }
+    const d = new Date(currentDate)
+    if (view === 'week') { d.setDate(d.getDate() + 7) } else { d.setMonth(d.getMonth() + 1) }
+    setCurrentDate(d)
   }
   const goToday = () => setCurrentDate(new Date())
 
-  // Build list of days to show based on current view (week/month)
-  const getDaysToShow = () => {
+  const daysToShow = useMemo(() => {
     const days = []
     if (view === 'week') {
-      // Start of week (Sunday)
       const start = new Date(currentDate)
       start.setDate(start.getDate() - start.getDay())
       for (let i = 0; i < 7; i++) {
@@ -892,43 +902,34 @@ export default function Schedule() {
         const year = dayDate.getFullYear()
         const month = dayDate.getMonth()
         const day = dayDate.getDate()
-        const dayShifts = shifts.filter(s => 
-          s.year === year && 
-          s.month === month && 
-          s.day === day &&
+        const dayShifts = shifts.filter(s =>
+          s.year === year && s.month === month && s.day === day &&
           (roleFilter === 'all' || s.role === roleFilter)
         )
-        const dayTimeOff = timeOff.filter(to => 
-          to.year === year && 
-          to.month === month && 
-          to.days && 
+        const dayTimeOff = timeOff.filter(to =>
+          to.year === year && to.month === month && to.days &&
           String(to.days).split(',').map(d => parseInt(d.trim())).includes(day)
         )
         days.push({ date: dayDate, shifts: dayShifts, timeOff: dayTimeOff })
       }
     } else {
-      // Month view - all days of the current month
       for (let i = 1; i <= daysInMonth; i++) {
         const year = currentYear
         const month = currentMonth
         const day = i
-        const dayShifts = shifts.filter(s => 
-          s.year === year && 
-          s.month === month && 
-          s.day === day &&
+        const dayShifts = shifts.filter(s =>
+          s.year === year && s.month === month && s.day === day &&
           (roleFilter === 'all' || s.role === roleFilter)
         )
-        const dayTimeOff = timeOff.filter(to => 
-          to.year === year && 
-          to.month === month && 
-          to.days && 
+        const dayTimeOff = timeOff.filter(to =>
+          to.year === year && to.month === month && to.days &&
           String(to.days).split(',').map(d => parseInt(d.trim())).includes(day)
         )
         days.push({ date: new Date(year, month, day), shifts: dayShifts, timeOff: dayTimeOff })
       }
     }
     return days
-  }
+  }, [view, currentDate, shifts, timeOff, roleFilter, daysInMonth, currentYear, currentMonth])
 
   const formatDayHeader = (date) => {
     return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
@@ -993,7 +994,7 @@ export default function Schedule() {
             </div>
             <div className="flex flex-wrap gap-2">
               <button onClick={() => setShowAddShift(true)} className="btn-primary text-sm">Add Shift</button>
-              <button onClick={() => setShowScheduleBuilder(true)} className="btn-secondary text-sm">Build Month</button>
+              <button onClick={() => setShowScheduleBuilder(true)} disabled={isBuilding} className="btn-secondary text-sm">Build Month</button>
               <button onClick={() => setShowCopyWeek(true)} className="btn-secondary text-sm">Copy Month</button>
               <button onClick={() => csvRef.current.click()} className="btn-secondary text-sm">Import CSV</button>
               <button onClick={exportCSV} className="btn-secondary text-sm">Export CSV</button>
@@ -1033,7 +1034,7 @@ export default function Schedule() {
         <div className="space-y-6">
           {/* Day-stacked list for week view */}
           {(() => {
-            const days = getDaysToShow()
+            const days = daysToShow
             const anyShiftsOrTimeOff = days.some(day => day.shifts.length > 0 || day.timeOff.length > 0)
             return (
               <>
@@ -1074,7 +1075,7 @@ export default function Schedule() {
                                   <div className="flex justify-between items-center">
                                     <div className="font-semibold">{s.name}</div>
                                     {hasRole('manager') && (
-                                      <IconButton icon={TrashIcon} label={`Delete shift for ${s.name}`} tone="danger" onClick={() => deleteShift(s.id)} />
+                                      <IconButton icon={TrashIcon} label={`Delete shift for ${s.name}`} tone="danger" disabled={!!deletingShiftId} onClick={() => deleteShift(s.id)} />
                                     )}
                                   </div>
                                   <div className="text-gray-400 text-sm mt-1">
@@ -1116,81 +1117,43 @@ export default function Schedule() {
           })()}
         </div>
       ) : (
-        <div className="space-y-6">
-          {/* Month view: compact cards on mobile, calendar-style grid on desktop */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
-            {getDaysToShow().map(({ date, shifts: dayShifts, timeOff: dayTimeOff }) => {
+        <div className="space-y-2">
+          {/* DOW header */}
+          <div className="grid grid-cols-7 gap-px">
+            {weekDays.map(d => (
+              <div key={d} className="text-center text-xs font-semibold text-gray-500 py-1">{d}</div>
+            ))}
+          </div>
+          {/* Compact calendar grid */}
+          <div className="grid grid-cols-7 gap-px bg-bar-blue/20 rounded-xl overflow-hidden border border-bar-blue/30">
+            {/* Leading empty cells */}
+            {Array.from({ length: firstDay }).map((_, i) => (
+              <div key={`empty-${i}`} className="bg-bar-dark min-h-[64px]" />
+            ))}
+            {/* Day cells */}
+            {daysToShow.map(({ date, shifts: dayShifts, timeOff: dayTimeOff }) => {
               const dayKey = date.toISOString().split('T')[0]
-              const isEmpty = dayShifts.length === 0 && dayTimeOff.length === 0
+              const isToday = date.toDateString() === new Date().toDateString()
+              const overflow = dayShifts.length > 2 ? dayShifts.length - 2 : 0
               return (
                 <div
                   key={dayKey}
                   onClick={() => setSelectedDay({ date, shifts: dayShifts, timeOff: dayTimeOff })}
-                  className="bg-bar-card rounded-xl p-4 shadow-lg hover:shadow-xl transition-shadow cursor-pointer lg:min-h-[180px]"
+                  className="relative bg-bar-card hover:bg-bar-blue/30 active:bg-bar-blue/50 cursor-pointer min-h-[64px] p-1 flex flex-col transition-colors"
                 >
-                  <div className="flex justify-between items-center mb-3 pb-2 border-b border-bar-dark">
-                    <h3 className="font-bold text-xl">{formatDayHeader(date)}</h3>
-                    <span className="text-gray-400 text-sm">
-                      {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  <span className={`text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full mb-0.5 ${isToday ? 'bg-bar-accent text-white' : 'text-gray-300'}`}>
+                    {date.getDate()}
+                  </span>
+                  {dayShifts.slice(0, 2).map(s => (
+                    <span key={s.id} className={`text-[10px] px-1 rounded truncate text-white mb-0.5 ${getRoleColor(s.role)}`}>
+                      {s.name.split(' ')[0]}
                     </span>
-                  </div>
-                  {isEmpty ? (
-                    <div className="text-center py-6 text-gray-400">
-                      <div className="text-lg">No shifts</div>
-                      <p className="text-sm mt-1">Tap + to add a shift</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {dayShifts.map(s => {
-                        const hasConflict = dayShifts.some(other =>
-                          other.id !== s.id &&
-                          other.name === s.name &&
-                          shiftsOverlap(s.start, s.end, other.start, other.end)
-                        )
-
-                        return (
-                          <div
-                            key={s.id}
-                            className={`p-3 rounded-lg border-l-4 ${hasConflict ? 'border-red-500 bg-red-500/10' : `${getRoleColor(s.role)} border-opacity-80 bg-bar-blue/10`}`}
-                          >
-                            <div className="flex justify-between items-center">
-                              <div className="font-semibold">{s.name}</div>
-                              {hasRole('manager') && (
-                                <IconButton
-                                  icon={TrashIcon}
-                                  label={`Delete shift for ${s.name}`}
-                                  tone="danger"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    deleteShift(s.id)
-                                  }}
-                                />
-                              )}
-                            </div>
-                            <div className="text-gray-400 text-sm mt-1">
-                              {formatTime12(s.start)} - {formatTime12(s.end)}
-                            </div>
-                            {s.role && (
-                              <div className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-bar-dark text-gray-300">
-                                {s.role}
-                              </div>
-                            )}
-                            {hasConflict && (
-                              <div className="mt-2 text-xs text-red-300">Conflicts with another shift for {s.name}</div>
-                            )}
-                          </div>
-                        )
-                      })}
-                      {dayTimeOff.map(to => (
-                        <div
-                          key={to.id}
-                          className="bg-yellow-600/20 border-l-4 border-yellow-600 p-3 rounded-lg"
-                        >
-                          <div className="font-semibold text-yellow-300">OFF: {to.name}</div>
-                          <div className="text-gray-300 text-sm">{to.dates}</div>
-                        </div>
-                      ))}
-                    </div>
+                  ))}
+                  {overflow > 0 && (
+                    <span className="text-[10px] text-gray-400">+{overflow}</span>
+                  )}
+                  {dayTimeOff.length > 0 && (
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500/60" />
                   )}
                 </div>
               )
@@ -1301,8 +1264,8 @@ export default function Schedule() {
               This action is destructive for the selected month. The app will ask once more before replacing anything.
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setBuilderReview(null)} className="btn-secondary flex-1">Back</button>
-              <button onClick={commitGenerateSchedule} className="btn-primary flex-1">Continue</button>
+              <button onClick={() => setBuilderReview(null)} disabled={isGenerating} className="btn-secondary flex-1">Back</button>
+              <button onClick={commitGenerateSchedule} disabled={isGenerating} className="btn-primary flex-1">{isGenerating ? 'Generating…' : 'Continue'}</button>
             </div>
           </div>
         </div>
@@ -1390,96 +1353,87 @@ export default function Schedule() {
               <button onClick={() => setBuilderShifts([])} className="btn-secondary text-sm text-red-400">Clear All</button>
             </div>
             
-            <div className="space-y-4 mb-6">
+            {builderShifts.length > 0 && (
+              <div className="grid grid-cols-[40px_1fr_auto_80px_32px] gap-1 mb-1 px-1">
+                <span className="text-[10px] text-gray-500 font-semibold uppercase">Day</span>
+                <span className="text-[10px] text-gray-500 font-semibold uppercase">Staff</span>
+                <span className="text-[10px] text-gray-500 font-semibold uppercase">Time</span>
+                <span className="text-[10px] text-gray-500 font-semibold uppercase">Role</span>
+                <span />
+              </div>
+            )}
+            <div className="space-y-1.5 mb-6 overflow-x-auto">
               {builderShifts.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">
                   No shifts added yet. Click "Add Shift" to start.
                 </div>
               ) : (
                 builderShifts.map(shift => (
-                  <div key={shift.id} className="bg-bar-blue/10 p-4 rounded-xl border border-bar-blue/20 space-y-3">
-                    <div className="flex justify-between items-center">
-                      <h3 className="font-semibold text-lg">Shift #{builderShifts.indexOf(shift) + 1}</h3>
-                      <IconButton icon={TrashIcon} label={`Remove shift #${builderShifts.indexOf(shift) + 1}`} tone="danger" onClick={() => removeShift(shift.id)} />
+                  <div key={shift.id} className="grid grid-cols-[40px_1fr_auto_80px_32px] gap-1 items-center bg-bar-blue/10 rounded-lg px-1.5 py-1 border border-bar-blue/20 min-w-[520px]">
+                    {/* Day */}
+                    <select
+                      className="input py-1 px-1 text-sm w-full"
+                      value={shift.day}
+                      onChange={e => updateShift(shift.id, 'day', parseInt(e.target.value))}
+                    >
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+
+                    {/* Staff */}
+                    {profilesList.length > 0 ? (
+                      <select
+                        className="input py-1 px-1 text-sm w-full"
+                        value={shift.staffId}
+                        onChange={e => updateShift(shift.id, 'staffId', e.target.value)}
+                      >
+                        <option value="">Staff...</option>
+                        {profilesList.map(p => (
+                          <option key={p.id} value={p.id}>{p.full_name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        className="input py-1 px-1 text-sm w-full"
+                        value={shift.name}
+                        onChange={e => updateShift(shift.id, 'name', e.target.value)}
+                        placeholder="Name"
+                      />
+                    )}
+
+                    {/* Start–End */}
+                    <div className="flex items-center gap-0.5">
+                      <input
+                        type="time"
+                        className="input py-1 px-1 text-sm w-[88px]"
+                        value={shift.start}
+                        onChange={e => updateShift(shift.id, 'start', e.target.value)}
+                      />
+                      <span className="text-gray-500 text-xs">–</span>
+                      <input
+                        type="time"
+                        className="input py-1 px-1 text-sm w-[88px]"
+                        value={shift.end}
+                        onChange={e => updateShift(shift.id, 'end', e.target.value)}
+                      />
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {/* Day */}
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">Day</label>
-                        <select 
-                          className="input w-full" 
-                          value={shift.day} 
-                          onChange={e => updateShift(shift.id, 'day', parseInt(e.target.value))}
-                        >
-                          {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
-                            <option key={d} value={d}>{d}</option>
-                          ))}
-                        </select>
-                      </div>
-                      
-                      {/* Staff */}
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">Staff</label>
-                        {profilesList.length > 0 ? (
-                          <select 
-                            className="input w-full" 
-                            value={shift.staffId} 
-                            onChange={e => updateShift(shift.id, 'staffId', e.target.value)}
-                          >
-                            <option value="">Select staff...</option>
-                            {profilesList.map(p => (
-                              <option key={p.id} value={p.id}>{p.full_name} ({p.role})</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <input
-                            className="input w-full"
-                            value={shift.name}
-                            onChange={e => updateShift(shift.id, 'name', e.target.value)}
-                            placeholder="Staff name"
-                          />
-                        )}
-                      </div>
-                      
-                      {/* Start Time */}
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">Start</label>
-                        <input 
-                          type="time" 
-                          className="input w-full" 
-                          value={shift.start} 
-                          onChange={e => updateShift(shift.id, 'start', e.target.value)}
-                        />
-                      </div>
-                      
-                      {/* End Time */}
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">End</label>
-                        <input 
-                          type="time" 
-                          className="input w-full" 
-                          value={shift.end} 
-                          onChange={e => updateShift(shift.id, 'end', e.target.value)}
-                        />
-                      </div>
-                      
-                      {/* Role */}
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">Role</label>
-                        <select 
-                          className="input w-full" 
-                          value={shift.role} 
-                          onChange={e => updateShift(shift.id, 'role', e.target.value)}
-                        >
-                          <option value="staff">Staff</option>
-                          <option value="bartender">Bartender</option>
-                          <option value="server">Server</option>
-                          <option value="cook">Cook</option>
-                          <option value="manager">Manager</option>
-                        </select>
-                      </div>
-                    </div>
+                    {/* Role */}
+                    <select
+                      className="input py-1 px-1 text-sm w-full"
+                      value={shift.role}
+                      onChange={e => updateShift(shift.id, 'role', e.target.value)}
+                    >
+                      <option value="staff">Staff</option>
+                      <option value="bartender">Bar</option>
+                      <option value="server">Server</option>
+                      <option value="cook">Cook</option>
+                      <option value="manager">Mgr</option>
+                    </select>
+
+                    {/* Delete */}
+                    <IconButton icon={TrashIcon} label="Remove shift" tone="danger" onClick={() => removeShift(shift.id)} />
                   </div>
                 ))
               )}
@@ -1487,7 +1441,7 @@ export default function Schedule() {
             
             <div className="flex gap-2 mt-6">
               <button onClick={() => setShowScheduleBuilder(false)} className="btn-secondary flex-1">Cancel</button>
-              <button onClick={generateSchedule} className="btn-primary flex-1">Generate Schedule</button>
+              <button onClick={generateSchedule} disabled={isGenerating} className="btn-primary flex-1">{isGenerating ? 'Generating…' : 'Generate Schedule'}</button>
             </div>
           </div>
         </div>
