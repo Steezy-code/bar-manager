@@ -103,7 +103,6 @@ export default function Schedule() {
   const [showScheduleBuilder, setShowScheduleBuilder] = useState(false)
   const [builderShifts, setBuilderShifts] = useState([])
   const [expandedBuilderGroups, setExpandedBuilderGroups] = useState({})
-  const [builderReview, setBuilderReview] = useState(null)
   const [scheduleIssues, setScheduleIssues] = useState(null)
   const [selectedDay, setSelectedDay] = useState(null)
   const [profilesList, setProfilesList] = useState([])
@@ -499,26 +498,16 @@ export default function Schedule() {
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
     const startDate = formatDateForSupabase(currentYear, currentMonth, 1)
     const endDate = formatDateForSupabase(currentYear, currentMonth, daysInMonth)
-    const existingMonthShifts = shifts.filter(s => s.year === currentYear && s.month === currentMonth)
-
-    setBuilderReview({
-      monthLabel: `${months[currentMonth]} ${currentYear}`,
-      removeCount: existingMonthShifts.length,
-      addCount: shiftsToInsert.length,
-      startDate,
-      endDate,
-      shiftsToInsert
-    })
-  }
-
-  const commitGenerateSchedule = async () => {
-    if (!builderReview || isGenerating) return
+    const existingCount = shifts.filter(s => s.year === currentYear && s.month === currentMonth).length
+    const monthLabel = `${months[currentMonth]} ${currentYear}`
 
     const confirmed = await confirmAction({
-      title: 'Replace month schedule?',
-      message: `Replace ${builderReview.removeCount} existing shifts in ${builderReview.monthLabel} with ${builderReview.addCount} new shifts?`,
-      confirmLabel: 'Replace',
-      danger: true
+      title: existingCount > 0 ? 'Replace month schedule?' : 'Generate schedule?',
+      message: existingCount > 0
+        ? `Replace ${existingCount} existing shifts in ${monthLabel} with ${shiftsToInsert.length} new shifts?`
+        : `Add ${shiftsToInsert.length} shifts to ${monthLabel}?`,
+      confirmLabel: existingCount > 0 ? 'Replace' : 'Add',
+      danger: existingCount > 0
     })
     if (!confirmed) return
 
@@ -527,20 +516,19 @@ export default function Schedule() {
       const { error: deleteError } = await supabase
         .from(TABLES.SHIFTS)
         .delete()
-        .gte('date', builderReview.startDate)
-        .lte('date', builderReview.endDate)
+        .gte('date', startDate)
+        .lte('date', endDate)
       if (deleteError) throw deleteError
 
       const { error } = await supabase
         .from(TABLES.SHIFTS)
-        .insert(builderReview.shiftsToInsert)
+        .insert(shiftsToInsert)
         .select('*')
       if (error) throw error
 
       await fetchShifts()
       setShowScheduleBuilder(false)
-      setBuilderReview(null)
-      notify(`Schedule generated with ${builderReview.addCount} shifts.`, 'success')
+      notify(`Schedule generated with ${shiftsToInsert.length} shifts.`, 'success')
     } catch (err) {
       console.error('Error generating schedule:', err)
       notify('Failed to generate schedule.', 'error')
@@ -1306,31 +1294,6 @@ export default function Schedule() {
         </div>
       )}
 
-      {builderReview && (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 z-50">
-          <div className="bg-bar-card p-4 md:p-6 rounded-t-2xl md:rounded-xl w-full max-w-full md:max-w-lg mx-auto md:mx-0">
-            <h2 className="text-xl font-bold mb-2">Review month replacement</h2>
-            <p className="text-gray-400 mb-4">This will replace the schedule for {builderReview.monthLabel}.</p>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="rounded-lg bg-bar-blue/20 p-4">
-                <div className="text-2xl font-bold">{builderReview.removeCount}</div>
-                <div className="text-sm text-gray-400">Existing shifts removed</div>
-              </div>
-              <div className="rounded-lg bg-bar-blue/20 p-4">
-                <div className="text-2xl font-bold">{builderReview.addCount}</div>
-                <div className="text-sm text-gray-400">New shifts added</div>
-              </div>
-            </div>
-            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-100 mb-5">
-              This action is destructive for the selected month. The app will ask once more before replacing anything.
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => setBuilderReview(null)} disabled={isGenerating} className="btn-secondary flex-1">Back</button>
-              <button onClick={commitGenerateSchedule} disabled={isGenerating} className="btn-primary flex-1">{isGenerating ? 'Generating…' : 'Continue'}</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Copy Month Modal */}
       {showCopyWeek && (
