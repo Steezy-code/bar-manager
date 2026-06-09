@@ -34,6 +34,7 @@ export default function TimeOff() {
   const [monthIsOneIndexed, setMonthIsOneIndexed] = useState(false)
   const [savingRequest, setSavingRequest] = useState(false)
   const [processingRequestId, setProcessingRequestId] = useState(null)
+  const [dismissing, setDismissing] = useState(null) // { id, dir: 'right'|'left' }
 
   const fetchTimeOff = useCallback(async () => {
     setLoading(true)
@@ -178,6 +179,10 @@ export default function TimeOff() {
       return
     }
 
+    setDismissing({ id: request.id, dir: 'left' })
+    await new Promise(r => setTimeout(r, 320))
+    setDismissing(null)
+
     try {
       const { error } = await supabase
         .from(TABLES.TIME_OFF)
@@ -268,16 +273,32 @@ export default function TimeOff() {
       {pending.length > 0 && (
         <div className="card border border-yellow-500 bg-yellow-500/20">
           <h2 className="mb-4 text-lg font-bold text-yellow-400">Pending Requests ({pending.length})</h2>
-          <div className="space-y-3">
+          <div className="space-y-3 overflow-hidden">
             {pending.map(t => (
-              <div key={t.id} className="flex flex-col gap-3 rounded-lg border border-yellow-500 bg-bar-card p-3 md:flex-row md:items-center md:justify-between">
+              <div
+                key={t.id}
+                className={`flex flex-col gap-3 rounded-lg border border-yellow-500 bg-bar-card p-3 md:flex-row md:items-center md:justify-between transition-all duration-300 ease-in ${
+                  dismissing?.id === t.id
+                    ? dismissing.dir === 'right'
+                      ? 'translate-x-full opacity-0'
+                      : '-translate-x-full opacity-0'
+                    : ''
+                }`}
+              >
                 <div>
                   <div className="font-semibold">{t.name}</div>
                   <div className="text-sm text-gray-400">{t.dates} (Days: {t.days})</div>
                 </div>
                 {canManageRequests ? (
                   <div className="flex gap-2">
-                    <button onClick={() => approveRequest(t)} disabled={!!processingRequestId} className="flex min-h-touch flex-1 items-center justify-center gap-1 rounded-lg bg-green-600 px-3 font-semibold text-white hover:bg-green-500 active:scale-[0.97] disabled:opacity-50 md:flex-none">
+                    <button
+                      onClick={() => {
+                        setDismissing({ id: t.id, dir: 'right' })
+                        setTimeout(() => approveRequest(t), 320)
+                      }}
+                      disabled={!!processingRequestId}
+                      className="flex min-h-touch flex-1 items-center justify-center gap-1 rounded-lg bg-green-600 px-3 font-semibold text-white hover:bg-green-500 active:scale-[0.97] disabled:opacity-50 md:flex-none"
+                    >
                       <CheckIcon className="h-5 w-5" /> Approve
                     </button>
                     <button onClick={() => denyRequest(t)} disabled={!!processingRequestId} className="flex min-h-touch flex-1 items-center justify-center gap-1 rounded-lg bg-red-600 px-3 font-semibold text-white hover:bg-red-500 active:scale-[0.97] disabled:opacity-50 md:flex-none">
@@ -299,8 +320,12 @@ export default function TimeOff() {
           <p className="text-gray-400">No time off scheduled yet.</p>
         ) : (
           <div className="space-y-3">
-            {approved.map(t => (
-              <div key={t.id} className="flex items-center justify-between gap-3 rounded-lg bg-bar-blue p-3">
+            {approved.map((t, idx) => (
+              <div
+                key={t.id}
+                className="flex items-center justify-between gap-3 rounded-lg bg-bar-blue p-3 animate-fade-slide-up"
+                style={{ animationDelay: `${Math.min(idx * 40, 400)}ms` }}
+              >
                 <div className="min-w-0">
                   <div className="truncate font-semibold">{t.name}</div>
                   <div className="text-sm text-gray-400">{t.dates} (Days: {t.days})</div>

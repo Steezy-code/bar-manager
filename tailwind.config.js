@@ -54,6 +54,7 @@ export default {
         'toast-in':    'toastIn 0.25s ease-out',
         'quantity-pop':'quantityPop 0.35s ease-out',
         'check-pop':   'checkPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        'fade-slide-up': 'fadeSlideUp 0.4s ease-out both',
       },
     },
   },
