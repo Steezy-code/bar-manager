@@ -986,7 +986,7 @@ export default function Schedule() {
 
   if (loading) {
     return (
-      <div className="space-y-6 pb-24 lg:pb-0">
+      <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">Schedule</h1>
           <div className="flex gap-2 flex-wrap print:hidden">
@@ -1013,7 +1013,7 @@ export default function Schedule() {
   }
 
   return (
-    <div className="space-y-6 pb-24 lg:pb-0">
+    <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Schedule</h1>
@@ -1061,22 +1061,25 @@ export default function Schedule() {
       </div>
 
       {/* Role filter tabs — horizontal scroll-snap with comfortable taps */}
-      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 mt-4 mb-2 snap-x scrollbar-none md:mx-0 md:justify-center md:flex-wrap md:px-0">
-        {[
-          { key: 'all', label: 'All Roles' },
-          { key: 'bartender', label: 'Bar' },
-          { key: 'server', label: 'Server' },
-          { key: 'cook', label: 'Kitchen' },
-          { key: 'manager', label: 'Manager' },
-        ].map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setRoleFilter(key)}
-            className={`shrink-0 snap-start min-h-touch rounded-lg px-4 font-medium transition active:scale-[0.97] ${roleFilter === key ? 'bg-bar-accent font-semibold text-white' : 'bg-bar-card text-gray-300 hover:bg-bar-blue'}`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="relative mt-4 mb-2">
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 snap-x scrollbar-none md:mx-0 md:justify-center md:flex-wrap md:px-0">
+          {[
+            { key: 'all', label: 'All Roles' },
+            { key: 'bartender', label: 'Bar' },
+            { key: 'server', label: 'Server' },
+            { key: 'cook', label: 'Kitchen' },
+            { key: 'manager', label: 'Manager' },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setRoleFilter(key)}
+              className={`shrink-0 snap-start min-h-touch rounded-lg px-4 font-medium transition active:scale-[0.97] ${roleFilter === key ? 'bg-bar-accent font-semibold text-white' : 'bg-bar-card text-gray-300 hover:bg-bar-blue'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-bar-dark to-transparent md:hidden" />
       </div>
 
       {view === 'week' ? (
@@ -1199,7 +1202,7 @@ export default function Schedule() {
                     </span>
                   ))}
                   {overflow > 0 && (
-                    <span className="text-[10px] text-gray-400">+{overflow}</span>
+                    <span className="text-[10px] text-gray-300 font-medium bg-bar-blue/40 rounded px-0.5">+{overflow}</span>
                   )}
                   {dayTimeOff.length > 0 && (
                     <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-500/60" />
@@ -1420,6 +1423,7 @@ export default function Schedule() {
                     </button>
 
                     {expandedBuilderGroups[group.key] && (
+                      <div className="relative">
                       <div className="space-y-1.5 border-t border-bar-blue/30 p-2 overflow-x-auto">
                         <div className="grid grid-cols-[40px_1fr_auto_80px_32px] gap-1 px-1 min-w-[520px]">
                           <span className="text-[10px] text-gray-500 font-semibold uppercase">Day</span>
@@ -1496,6 +1500,8 @@ export default function Schedule() {
                     <IconButton icon={TrashIcon} label="Remove shift" tone="danger" onClick={() => removeShift(shift.id)} />
                   </div>
                         ))}
+                      </div>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-bar-dark to-transparent md:hidden" />
                       </div>
                     )}
                   </div>
