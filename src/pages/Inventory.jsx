@@ -599,10 +599,14 @@ export default function Inventory() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredItems.map(i => {
+        {filteredItems.map((i, idx) => {
           const isLow = Number(i.quantity || 0) <= Number(i.threshold || 5)
           return (
-            <div key={i.id} className={`card ${isLow ? 'border-red-500' : ''}`}>
+            <div
+              key={i.id}
+              className={`card animate-fade-slide-up ${isLow ? 'border-red-500' : ''}`}
+              style={{ animationDelay: `${Math.min(idx * 40, 400)}ms` }}
+            >
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <h3 className="font-semibold">{highlight(i.name, search.trim())}</h3>
