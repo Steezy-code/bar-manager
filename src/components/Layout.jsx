@@ -160,13 +160,10 @@ export default function Layout({ user, onLogout }) {
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bar-card border-t border-bar-blue flex justify-around pt-3 pb-safe-nav z-40 print:hidden">
         {activeNavIndex >= 0 && (
           <div
-            className="pointer-events-none absolute inset-y-0 left-0 w-1/5 px-0.5 pt-1.5 transition-transform duration-300 ease-out"
-            style={{
-              paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.625rem)',
-              transform: `translateX(${activeNavIndex * 100}%)`
-            }}
+            className="pointer-events-none absolute left-0 top-2 h-11 w-1/5 px-1 transition-transform duration-300 ease-out"
+            style={{ transform: `translateX(${activeNavIndex * 100}%)` }}
           >
-            <div className="h-full w-full rounded-2xl bg-white/10" />
+            <div className="h-full w-full rounded-2xl bg-white/[0.12]" />
           </div>
         )}
         {allNavItems.slice(0, 5).map((item) => (
