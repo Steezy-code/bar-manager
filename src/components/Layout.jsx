@@ -157,7 +157,7 @@ export default function Layout({ user, onLogout }) {
         )}
         <main className="px-4 pt-4 pb-safe-content lg:p-8 lg:pb-8 print:p-2"><Outlet /></main>
       </div>
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bar-card border-t border-bar-blue flex justify-around pt-3 pb-safe-nav z-40 print:hidden relative">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bar-card border-t border-bar-blue flex justify-around pt-3 pb-safe-nav z-40 print:hidden">
         {activeNavIndex >= 0 && (
           <div
             className="pointer-events-none absolute top-0 h-0.5 bg-bar-accent rounded-full transition-transform duration-300 ease-out"
