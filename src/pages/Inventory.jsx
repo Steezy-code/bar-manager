@@ -492,7 +492,7 @@ export default function Inventory() {
 
   if (!canManageInventory) {
     return (
-      <div className="space-y-6 pb-24 lg:pb-0">
+      <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold">Inventory</h1>
           <p className="text-gray-400">Only managers and admins can access inventory.</p>
@@ -503,7 +503,7 @@ export default function Inventory() {
 
   if (loading) {
     return (
-      <div className="space-y-6 pb-24 lg:pb-0">
+      <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold">Inventory</h1>
           <p className="text-gray-400">Loading…</p>
@@ -514,7 +514,7 @@ export default function Inventory() {
   }
 
   return (
-    <div className="space-y-6 pb-24 lg:pb-0">
+    <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Inventory</h1>
@@ -599,10 +599,14 @@ export default function Inventory() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredItems.map(i => {
+        {filteredItems.map((i, idx) => {
           const isLow = Number(i.quantity || 0) <= Number(i.threshold || 5)
           return (
-            <div key={i.id} className={`card ${isLow ? 'border-red-500' : ''}`}>
+            <div
+              key={i.id}
+              className={`card animate-fade-slide-up ${isLow ? 'border-red-500' : ''}`}
+              style={{ animationDelay: `${Math.min(idx * 40, 400)}ms` }}
+            >
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <h3 className="font-semibold">{highlight(i.name, search.trim())}</h3>
@@ -616,7 +620,7 @@ export default function Inventory() {
               </div>
               <div className="mt-3 flex items-center">
                 <button onClick={() => update(i.id, -1)} disabled={updatingId === i.id} className="flex h-11 w-11 items-center justify-center rounded-lg bg-bar-blue active:scale-90 disabled:opacity-50" aria-label={`Decrease ${i.name}`}><MinusIcon className="h-5 w-5" /></button>
-                <span className="mx-4 text-lg font-bold tabular-nums">{i.quantity}</span>
+                <span className={`mx-4 text-lg font-bold tabular-nums${updatingId === i.id ? ' animate-quantity-pop' : ''}`}>{i.quantity}</span>
                 <button onClick={() => update(i.id, 1)} disabled={updatingId === i.id} className="flex h-11 w-11 items-center justify-center rounded-lg bg-bar-blue active:scale-90 disabled:opacity-50" aria-label={`Increase ${i.name}`}><PlusIcon className="h-5 w-5" /></button>
                 <span className="ml-3 text-sm text-gray-400">{i.unit}</span>
               </div>

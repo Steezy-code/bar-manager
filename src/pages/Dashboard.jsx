@@ -210,7 +210,7 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="space-y-4 pb-24 lg:pb-0">
+      <div className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div className="space-y-2">
             <Skeleton className="h-7 w-40" />
@@ -263,7 +263,7 @@ export default function Dashboard() {
   ]
 
   return (
-    <div className="space-y-4 pb-24 lg:pb-0">
+    <div className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">{greeting}</h1>
@@ -356,7 +356,7 @@ export default function Dashboard() {
             <p className="text-sm text-gray-400">{checklistStatus.completed}/{checklistStatus.total} tasks complete</p>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-bar-blue">
-            <div className="h-full rounded-full bg-bar-accent" style={{ width: `${checklistPercent}%` }} />
+            <div className="h-full rounded-full bg-bar-accent transition-[width] duration-700 ease-out" style={{ width: `${checklistPercent}%` }} />
           </div>
           <div className="flex items-center justify-between gap-3 rounded-lg bg-bar-blue/30 p-3">
             <span className="text-sm text-gray-300">{checklistRemaining ? `${checklistRemaining} remaining` : 'All caught up'}</span>
