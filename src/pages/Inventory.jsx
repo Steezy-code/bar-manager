@@ -492,7 +492,7 @@ export default function Inventory() {
 
   if (!canManageInventory) {
     return (
-      <div className="space-y-6 pb-24 lg:pb-0">
+      <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold">Inventory</h1>
           <p className="text-gray-400">Only managers and admins can access inventory.</p>
@@ -503,7 +503,7 @@ export default function Inventory() {
 
   if (loading) {
     return (
-      <div className="space-y-6 pb-24 lg:pb-0">
+      <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold">Inventory</h1>
           <p className="text-gray-400">Loading…</p>
@@ -514,7 +514,7 @@ export default function Inventory() {
   }
 
   return (
-    <div className="space-y-6 pb-24 lg:pb-0">
+    <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Inventory</h1>
