@@ -210,7 +210,7 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="space-y-4 pb-24 lg:pb-0">
+      <div className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div className="space-y-2">
             <Skeleton className="h-7 w-40" />
@@ -263,7 +263,7 @@ export default function Dashboard() {
   ]
 
   return (
-    <div className="space-y-4 pb-24 lg:pb-0">
+    <div className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">{greeting}</h1>

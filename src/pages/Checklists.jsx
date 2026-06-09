@@ -253,7 +253,7 @@ export default function Checklists() {
 
   if (loading) {
     return (
-      <div className="space-y-6 pb-24 lg:pb-0">
+      <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">Checklists</h1>
         </div>
@@ -263,7 +263,7 @@ export default function Checklists() {
   }
 
   return (
-    <div className="space-y-6 pb-24 lg:pb-0">
+    <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Checklists</h1>
         <div className="flex gap-2">
@@ -274,36 +274,39 @@ export default function Checklists() {
         </div>
       </div>
       {/* Horizontal scroll-snap selector — comfortable taps, no wrap/overflow jank on mobile */}
-      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 snap-x snap-mandatory scrollbar-none">
-        {Object.keys(tasks).map(t => (
-          <div key={t} className="flex shrink-0 snap-start items-stretch">
-            <button
-              onClick={() => setList(t)}
-              className={`min-h-touch rounded-l-lg px-4 font-medium capitalize transition active:scale-[0.97] ${list===t?'bg-bar-accent text-white':'bg-bar-card text-gray-300'} ${!(Object.keys(tasks).length > 1 && hasRole('manager')) ? 'rounded-r-lg' : ''}`}
-            >
-              {(() => {
-                const tabTasks = tasks[t] || []
-                const done = tabTasks.filter(task => task.c).length
-                const total = tabTasks.length
-                return (
-                  <span className="flex flex-col items-center leading-tight">
-                    <span className="capitalize">{t}</span>
-                    {total > 0 && <span className="text-[10px] opacity-70">{done}/{total}</span>}
-                  </span>
-                )
-              })()}
-            </button>
-            {Object.keys(tasks).length > 1 && hasRole('manager') && (
+      <div className="relative">
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 snap-x snap-mandatory scrollbar-none">
+          {Object.keys(tasks).map(t => (
+            <div key={t} className="flex shrink-0 snap-start items-stretch">
               <button
-                onClick={() => deleteList(t)}
-                aria-label={`Delete ${t} list`}
-                className="flex min-h-touch items-center rounded-r-lg bg-red-600 px-3 text-white hover:bg-red-500 active:scale-95"
+                onClick={() => setList(t)}
+                className={`min-h-touch rounded-l-lg px-4 font-medium capitalize transition active:scale-[0.97] ${list===t?'bg-bar-accent text-white':'bg-bar-card text-gray-300'} ${!(Object.keys(tasks).length > 1 && hasRole('manager')) ? 'rounded-r-lg' : ''}`}
               >
-                <XMarkIcon className="h-4 w-4" />
+                {(() => {
+                  const tabTasks = tasks[t] || []
+                  const done = tabTasks.filter(task => task.c).length
+                  const total = tabTasks.length
+                  return (
+                    <span className="flex flex-col items-center leading-tight">
+                      <span className="capitalize">{t}</span>
+                      {total > 0 && <span className="text-[10px] opacity-70">{done}/{total}</span>}
+                    </span>
+                  )
+                })()}
               </button>
-            )}
-          </div>
-        ))}
+              {Object.keys(tasks).length > 1 && hasRole('manager') && (
+                <button
+                  onClick={() => deleteList(t)}
+                  aria-label={`Delete ${t} list`}
+                  className="flex min-h-touch items-center rounded-r-lg bg-red-600 px-3 text-white hover:bg-red-500 active:scale-95"
+                >
+                  <XMarkIcon className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-bar-dark to-transparent md:hidden" />
       </div>
       <div className="card">
         <div className="flex justify-between mb-4">
