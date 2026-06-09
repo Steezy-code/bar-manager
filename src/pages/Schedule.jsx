@@ -1091,13 +1091,14 @@ export default function Schedule() {
             return (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {days.map(({ date, shifts: dayShifts, timeOff: dayTimeOff }) => {
+                  {days.map(({ date, shifts: dayShifts, timeOff: dayTimeOff }, idx) => {
                     const dayKey = date.toISOString().split('T')[0]
                     const isEmpty = dayShifts.length === 0 && dayTimeOff.length === 0
                     return (
                       <div
                         key={dayKey}
-                        className="bg-bar-card rounded-xl p-4 shadow-lg hover:shadow-xl transition-shadow"
+                        className="bg-bar-card rounded-xl p-4 shadow-lg hover:shadow-xl transition-shadow animate-fade-slide-up"
+                        style={{ animationDelay: `${Math.min(idx * 40, 400)}ms` }}
                       >
                         <div className="flex justify-between items-center mb-3 pb-2 border-b border-bar-dark">
                           <h3 className="font-bold text-xl">{formatDayHeader(date)}</h3>

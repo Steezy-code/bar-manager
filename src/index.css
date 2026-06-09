@@ -26,6 +26,10 @@
   80%  { transform: scale(0.88); }
   100% { transform: scale(1);    opacity: 1; }
 }
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
 html {
   /* Smooth in-app anchored scrolling; never bounce the whole document. */
