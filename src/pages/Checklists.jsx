@@ -340,7 +340,7 @@ export default function Checklists() {
               <div onClick={() => toggle(t.id)} className={`flex-1 ${t.c && t.completed_by && t.completed_by !== user?.id && !canOverrideCompletion ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                 <div className="flex items-center gap-3">
                   {t.c ? (
-                    <CheckCircleIcon className="w-6 h-6 text-green-500 transition-transform duration-200 scale-110"/>
+                    <CheckCircleIcon className="w-6 h-6 text-green-500 animate-check-pop"/>
                   ) : (
                     <div className="w-6 h-6 rounded-full border-2"/>
                   )}

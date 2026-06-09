@@ -356,7 +356,7 @@ export default function Dashboard() {
             <p className="text-sm text-gray-400">{checklistStatus.completed}/{checklistStatus.total} tasks complete</p>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-bar-blue">
-            <div className="h-full rounded-full bg-bar-accent" style={{ width: `${checklistPercent}%` }} />
+            <div className="h-full rounded-full bg-bar-accent transition-[width] duration-700 ease-out" style={{ width: `${checklistPercent}%` }} />
           </div>
           <div className="flex items-center justify-between gap-3 rounded-lg bg-bar-blue/30 p-3">
             <span className="text-sm text-gray-300">{checklistRemaining ? `${checklistRemaining} remaining` : 'All caught up'}</span>
