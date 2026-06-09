@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { HomeIcon, CubeIcon, CalendarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, Cog6ToothIcon, Bars3Icon, XMarkIcon, UserIcon, ArrowRightOnRectangleIcon, ShieldCheckIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
@@ -21,6 +21,7 @@ export default function Layout({ user, onLogout }) {
   const [pendingTimeOffCount, setPendingTimeOffCount] = useState(0)
   const [pendingUsersCount, setPendingUsersCount] = useState(0)
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const { profile } = useAuth()
   const { hasRole, isApproved } = usePermissions()
 
@@ -81,6 +82,10 @@ export default function Layout({ user, onLogout }) {
   if (isApproved && hasRole('admin')) {
     allNavItems.push({ name: 'Admin', path: '/admin', icon: ShieldCheckIcon })
   }
+
+  const activeNavIndex = allNavItems.slice(0, 5).findIndex(item =>
+    item.path === '/' ? pathname === '/' : pathname.startsWith(item.path)
+  )
 
   const navBadges = {
     '/timeoff': pendingTimeOffCount > 0 ? pendingTimeOffCount : null,
@@ -152,7 +157,13 @@ export default function Layout({ user, onLogout }) {
         )}
         <main className="px-4 pt-4 pb-safe-content lg:p-8 lg:pb-8 print:p-2"><Outlet /></main>
       </div>
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bar-card border-t border-bar-blue flex justify-around pt-3 pb-safe-nav z-40 print:hidden">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bar-card border-t border-bar-blue flex justify-around pt-3 pb-safe-nav z-40 print:hidden relative">
+        {activeNavIndex >= 0 && (
+          <div
+            className="pointer-events-none absolute top-0 h-0.5 bg-bar-accent rounded-full transition-transform duration-300 ease-out"
+            style={{ width: '20%', transform: `translateX(${activeNavIndex * 100}%)` }}
+          />
+        )}
         {allNavItems.slice(0, 5).map((item) => (
           <NavLink key={item.path} to={item.path} className={({ isActive }) => `flex flex-1 flex-col items-center justify-center gap-1 min-h-touch ${isActive ? 'text-bar-accent' : 'text-gray-500'}`}>
             <div className="relative">

@@ -2,6 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(110%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes sheetUp {
+  from { opacity: 0; transform: translateY(100%); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes quantityPop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.45); color: #e94560; }
+  70%  { transform: scale(0.92); }
+  100% { transform: scale(1); }
+}
+@keyframes checkPop {
+  0%   { transform: scale(0);    opacity: 0; }
+  60%  { transform: scale(1.35); opacity: 1; }
+  80%  { transform: scale(0.88); }
+  100% { transform: scale(1);    opacity: 1; }
+}
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 html {
   /* Smooth in-app anchored scrolling; never bounce the whole document. */
   -webkit-text-size-adjust: 100%;
@@ -182,6 +211,10 @@ input, select, textarea {
   .modal-sheet {
     @apply w-full max-w-md max-h-[90vh] overflow-y-auto rounded-t-2xl bg-bar-card p-5 shadow-xl
       pb-[calc(1.25rem+env(safe-area-inset-bottom))] md:rounded-xl md:pb-5;
+    animation: sheetUp 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  @media (min-width: 768px) {
+    .modal-sheet { animation: scaleIn 0.2s ease-out; }
   }
 
   /* Consistent tappable list row (>=44px) for card/list layouts. */

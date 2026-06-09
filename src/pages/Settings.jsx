@@ -171,7 +171,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="space-y-6 pb-24 lg:pb-0">
+    <div className="space-y-6">
       <h1 className="text-2xl font-bold">Settings</h1>
 
       <div className="card">
