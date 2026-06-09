@@ -616,7 +616,7 @@ export default function Inventory() {
               </div>
               <div className="mt-3 flex items-center">
                 <button onClick={() => update(i.id, -1)} disabled={updatingId === i.id} className="flex h-11 w-11 items-center justify-center rounded-lg bg-bar-blue active:scale-90 disabled:opacity-50" aria-label={`Decrease ${i.name}`}><MinusIcon className="h-5 w-5" /></button>
-                <span className="mx-4 text-lg font-bold tabular-nums">{i.quantity}</span>
+                <span className={`mx-4 text-lg font-bold tabular-nums${updatingId === i.id ? ' animate-quantity-pop' : ''}`}>{i.quantity}</span>
                 <button onClick={() => update(i.id, 1)} disabled={updatingId === i.id} className="flex h-11 w-11 items-center justify-center rounded-lg bg-bar-blue active:scale-90 disabled:opacity-50" aria-label={`Increase ${i.name}`}><PlusIcon className="h-5 w-5" /></button>
                 <span className="ml-3 text-sm text-gray-400">{i.unit}</span>
               </div>
