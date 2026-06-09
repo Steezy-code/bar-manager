@@ -163,7 +163,9 @@ export default function Layout({ user, onLogout }) {
             className="pointer-events-none absolute left-0 top-2 h-11 w-1/5 px-1 transition-transform duration-300 ease-out"
             style={{ transform: `translateX(${activeNavIndex * 100}%)` }}
           >
-            <div className="h-full w-full rounded-2xl bg-white/[0.12]" />
+            <div className="h-full w-full rounded-full backdrop-blur-sm ring-1 ring-inset ring-white/25"
+              style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.12) 100%)' }}
+            />
           </div>
         )}
         {allNavItems.slice(0, 5).map((item) => (
