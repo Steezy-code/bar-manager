@@ -157,12 +157,19 @@ export default function Layout({ user, onLogout }) {
         )}
         <main className="px-4 pt-4 pb-safe-content lg:p-8 lg:pb-8 print:p-2"><Outlet /></main>
       </div>
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bar-card border-t border-bar-blue flex justify-around pt-3 pb-safe-nav z-40 print:hidden relative">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bar-card border-t border-bar-blue flex justify-around pt-3 pb-safe-nav z-40 print:hidden">
         {activeNavIndex >= 0 && (
           <div
-            className="pointer-events-none absolute top-0 h-0.5 bg-bar-accent rounded-full transition-transform duration-300 ease-out"
-            style={{ width: '20%', transform: `translateX(${activeNavIndex * 100}%)` }}
-          />
+            className="pointer-events-none absolute left-0 top-2 h-11 w-1/5 px-0.5 transition-transform duration-300"
+            style={{
+              transform: `translateX(${activeNavIndex * 100}%)`,
+              transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+            }}
+          >
+            <div className="h-full w-full rounded-full ring-1 ring-inset ring-white/[0.15]"
+              style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.06) 100%)' }}
+            />
+          </div>
         )}
         {allNavItems.slice(0, 5).map((item) => (
           <NavLink key={item.path} to={item.path} className={({ isActive }) => `flex flex-1 flex-col items-center justify-center gap-1 min-h-touch ${isActive ? 'text-bar-accent' : 'text-gray-500'}`}>

@@ -66,6 +66,10 @@ input, select, textarea {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+  /* Stagger delays use inline styles; override them here so items never stay invisible. */
+  .animate-fade-slide-up {
+    animation-delay: 0ms !important;
+  }
 }
 
 /* Print Styles - Ink Friendly */
