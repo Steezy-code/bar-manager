@@ -35,6 +35,7 @@ export const usePermissions = () => {
     isApproved,
     isPending: status === 'pending',
     isRejected: status === 'rejected',
+    isRemoved: status === 'removed',
     getRoleLevel,
     hasRole,
     hasExactRole,
