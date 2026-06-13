@@ -17,8 +17,6 @@ const REFERENCE_TABLES = [
   { key: 'announcements', table: TABLES.ANNOUNCEMENTS, label: 'Announcements' }
 ]
 
-const EMPTY_UUID = '00000000-0000-0000-0000-000000000000'
-
 const getBackupSection = (backup, key) => {
   if (key === 'time_off') {
     return [
@@ -142,23 +140,19 @@ export default function Settings() {
         })
         if (!confirmed) return
 
-        const clearResults = await Promise.all(RESTORE_SAFE_TABLES.map(({ table }) => (
-          supabase.from(table).delete().neq('id', EMPTY_UUID)
-        )))
-        const clearError = clearResults.find(result => result.error)?.error
-        if (clearError) throw clearError
+        // The restore runs server-side in a single transaction (restore_operational_backup),
+        // so a failure on any table rolls back the whole operation — the previous
+        // delete-all-then-insert flow could leave tables empty. The RPC also handles
+        // cross-user time-off rows that client-side inserts can't (RLS user_id check).
+        const { data: counts, error } = await supabase.rpc('restore_operational_backup', { payload: data })
+        if (error) throw error
 
-        let importedSections = 0
-        let importedRows = 0
-        for (const { key, table } of RESTORE_SAFE_TABLES) {
-          const rows = getBackupSection(data, key)
-          if (rows.length === 0) continue
-
-          const { error } = await supabase.from(table).insert(rows)
-          if (error) throw error
-          importedSections++
-          importedRows += rows.length
-        }
+        const importedRows = counts
+          ? Object.values(counts).reduce((sum, count) => sum + (Number(count) || 0), 0)
+          : 0
+        const importedSections = counts
+          ? Object.values(counts).filter(count => Number(count) > 0).length
+          : 0
 
         showMsg(`Restored ${importedRows} row(s) across ${importedSections} operational section(s). Refresh to see all data.`, 'success', 7000)
       } catch (err) {
