@@ -7,6 +7,7 @@ import { usePermissions } from '../hooks/usePermissions'
 import { useNotifications } from '../components/Notifications'
 import IconButton from '../components/IconButton'
 import { useAppRefresh } from '../hooks/usePullToRefresh'
+import { parseCSV, csvEscape } from '../lib/csv'
 
 // Format HH:MM to h:mm AM/PM
 const formatTime12 = (time24) => {
@@ -78,13 +79,34 @@ const weekdayAbbrToDayOfMonth = (abbr, year, monthZeroIndexed) => {
   return 1; // fallback
 };
 
-// Parse day input (number or weekday abbreviation) to day of month (1-31)
+const daysInMonthOf = (year, monthZeroIndexed) => new Date(year, monthZeroIndexed + 1, 0).getDate();
+
+// Parse day input (number or weekday abbreviation) to a valid day of the month.
+// Clamps to the real length of the target month so we never build an impossible
+// date like 2026-02-31 (which Postgres rejects, failing the whole import/insert).
 const parseDay = (dayRaw, year, monthZeroIndexed) => {
   if (!dayRaw) return 1;
   const num = parseInt(dayRaw, 10);
-  if (!isNaN(num)) return Math.max(1, Math.min(num, 31));
+  if (!isNaN(num)) return Math.max(1, Math.min(num, daysInMonthOf(year, monthZeroIndexed)));
   // treat as weekday abbreviation
   return weekdayAbbrToDayOfMonth(dayRaw, year, monthZeroIndexed);
+};
+
+// Expand a "days" string into day numbers. Accepts comma lists and ranges, e.g.
+// "15,16,17" or "15-17" → [15,16,17]. Unparseable parts are dropped.
+const parseDayNumbers = (days) => {
+  if (!days) return [];
+  return String(days).split(',').flatMap(part => {
+    const trimmed = part.trim();
+    const range = trimmed.match(/^(\d+)\s*-\s*(\d+)$/);
+    if (range) {
+      const start = parseInt(range[1], 10);
+      const end = parseInt(range[2], 10);
+      if (start <= end) return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+    }
+    const n = parseInt(trimmed, 10);
+    return Number.isFinite(n) ? [n] : [];
+  });
 };
 
 const normalizeName = (value) => String(value || '').trim().toLowerCase()
@@ -228,13 +250,12 @@ export default function Schedule() {
   const getTimeOffForDate = (year, month, day) => {
     return timeOff.filter(to => {
       if (to.year !== year || to.month !== month || !to.days) return false
-      const requestedDays = String(to.days).split(',').map(d => parseInt(d.trim()))
-      return requestedDays.includes(day)
+      return parseDayNumbers(to.days).includes(day)
     })
   }
 
   const toProposedShift = (shift, year = currentYear, month = currentMonth) => {
-    const date = formatDateForSupabase(year, month, Number(shift.day))
+    const date = formatDateForSupabase(year, month, parseDay(shift.day, year, month))
     const staffName = getStaffNameFromProfile(shift.staffId, shift.name)
     return {
       staff_name: staffName,
@@ -324,7 +345,7 @@ export default function Schedule() {
     const existing = shifts.filter(s => s.year === currentYear && s.month === currentMonth)
     const mapped = existing.map(s => ({
       id: `builder-${s.id}`,
-      staffId: profilesList.find(p => p.full_name === s.name)?.id || '',
+      staffId: profilesList.find(p => normalizeName(p.full_name) === normalizeName(s.name))?.id || '',
       name: s.name,
       day: s.day,
       start: s.start,
@@ -377,7 +398,7 @@ export default function Schedule() {
       const day = s.day > daysInMonth ? daysInMonth : s.day
       return {
         id: `copy-${s.id}-${Date.now()}`,
-        staffId: profilesList.find(p => p.full_name === s.name)?.id || '',
+        staffId: profilesList.find(p => normalizeName(p.full_name) === normalizeName(s.name))?.id || '',
         name: s.name,
         day,
         start: s.start,
@@ -513,6 +534,15 @@ export default function Schedule() {
 
     setIsGenerating(true)
     try {
+      // Snapshot the month's existing shifts first so a failed insert can't leave the
+      // month wiped — if the insert errors we put the originals back.
+      const { data: snapshot, error: snapshotError } = await supabase
+        .from(TABLES.SHIFTS)
+        .select('*')
+        .gte('date', startDate)
+        .lte('date', endDate)
+      if (snapshotError) throw snapshotError
+
       const { error: deleteError } = await supabase
         .from(TABLES.SHIFTS)
         .delete()
@@ -524,7 +554,12 @@ export default function Schedule() {
         .from(TABLES.SHIFTS)
         .insert(shiftsToInsert)
         .select('*')
-      if (error) throw error
+      if (error) {
+        if (snapshot && snapshot.length > 0) {
+          await supabase.from(TABLES.SHIFTS).insert(snapshot)
+        }
+        throw error
+      }
 
       await fetchShifts()
       setShowScheduleBuilder(false)
@@ -555,7 +590,7 @@ export default function Schedule() {
 
     const proposedShift = {
       staff_name: staffName,
-      date: formatDateForSupabase(currentYear, currentMonth, newShift.day),
+      date: formatDateForSupabase(currentYear, currentMonth, parseDay(newShift.day, currentYear, currentMonth)),
       start_time: newShift.start,
       end_time: newShift.end,
       user_id: selectedProfile?.id || user.id,
@@ -645,8 +680,7 @@ export default function Schedule() {
     return timeOff.filter(to => {
       if (!to.days) return false
       if (to.year !== currentYear || to.month !== currentMonth) return false
-      const days = String(to.days).split(',').map(d => parseInt(d.trim()))
-      return days.includes(dayNum)
+      return parseDayNumbers(to.days).includes(dayNum)
     })
   }
 
@@ -678,15 +712,22 @@ export default function Schedule() {
 
       if (shiftError) throw shiftError;
 
-      // Delete approved time-off entries for the month
-      const { error: timeOffError } = await supabase
-        .from(TABLES.TIME_OFF)
-        .delete()
-        .eq('month', currentMonth)
-        .eq('year', currentYear)
-        .eq('status', 'approved');
+      // Delete approved time-off entries for the displayed month by id. `timeOff` is
+      // already normalized to zero-indexed months on fetch, so this avoids re-deriving
+      // the stored month convention here (the old .eq('month', currentMonth) deleted the
+      // wrong month if the DB held 1-indexed values).
+      const monthTimeOffIds = timeOff
+        .filter(to => to.year === currentYear && to.month === currentMonth)
+        .map(to => to.id);
 
-      if (timeOffError) throw timeOffError;
+      if (monthTimeOffIds.length > 0) {
+        const { error: timeOffError } = await supabase
+          .from(TABLES.TIME_OFF)
+          .delete()
+          .in('id', monthTimeOffIds);
+
+        if (timeOffError) throw timeOffError;
+      }
 
       // Refresh UI
       await fetchShifts();
@@ -711,7 +752,7 @@ export default function Schedule() {
     const data = shifts.map(s => {
       const month = s.month !== undefined ? s.month + 1 : currentMonth + 1;
       const year = s.year !== undefined ? s.year : currentYear;
-      return `${s.name},${s.day},${s.start},${s.end},${s.role || ''},${month},${year}`;
+      return [s.name, s.day, s.start, s.end, s.role || '', month, year].map(csvEscape).join(',');
     });
     const csv = header + "\n" + data.join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -798,15 +839,14 @@ export default function Schedule() {
 
     const reader = new FileReader();
     reader.onload = async (event) => {
-      const text = event.target.result;
-      const lines = text.split('\n').filter(l => l.trim());
-      if (lines.length < 2) {
+      const rows = parseCSV(event.target.result);
+      if (rows.length < 2) {
         notify('CSV file is empty or has no data rows.', 'error');
         return;
       }
 
       // Parse header
-      const headers = lines[0].split(',').map(h => h.trim());
+      const headers = rows[0].map(h => String(h || '').trim());
       const nameIdx = headers.findIndex(h => h.toLowerCase() === 'name');
       const dayIdx = headers.findIndex(h => h.toLowerCase() === 'day');
       const startIdx = headers.findIndex(h => h.toLowerCase() === 'start');
@@ -822,8 +862,8 @@ export default function Schedule() {
 
       const shiftsToInsert = [];
 
-      for (let i = 1; i < lines.length; i++) {
-        const parts = lines[i].split(',').map(p => p.trim());
+      for (let i = 1; i < rows.length; i++) {
+        const parts = rows[i].map(p => String(p ?? '').trim());
         const name = parts[nameIdx];
         if (!name) continue; // skip empty rows
 
@@ -957,7 +997,7 @@ export default function Schedule() {
         )
         const dayTimeOff = timeOff.filter(to =>
           to.year === year && to.month === month && to.days &&
-          String(to.days).split(',').map(d => parseInt(d.trim())).includes(day)
+          parseDayNumbers(to.days).includes(day)
         )
         days.push({ date: dayDate, shifts: dayShifts, timeOff: dayTimeOff })
       }
@@ -972,7 +1012,7 @@ export default function Schedule() {
         )
         const dayTimeOff = timeOff.filter(to =>
           to.year === year && to.month === month && to.days &&
-          String(to.days).split(',').map(d => parseInt(d.trim())).includes(day)
+          parseDayNumbers(to.days).includes(day)
         )
         days.push({ date: new Date(year, month, day), shifts: dayShifts, timeOff: dayTimeOff })
       }
