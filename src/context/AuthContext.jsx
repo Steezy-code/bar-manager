@@ -83,6 +83,16 @@ export const AuthProvider = ({ children }) => {
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    // Drop cached Supabase REST responses (PWA NetworkFirst cache, 'supabase-data')
+    // so the next account signing in on this device can't be served the previous
+    // user's RLS-scoped data from cache while offline or during a network timeout.
+    if (typeof caches !== 'undefined') {
+      try {
+        await caches.delete('supabase-data');
+      } catch {
+        // Cache API unavailable or blocked — nothing to clean up.
+      }
+    }
   };
 
   const value = {
