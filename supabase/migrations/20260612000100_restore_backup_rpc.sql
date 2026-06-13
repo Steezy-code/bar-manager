@@ -81,7 +81,9 @@ BEGIN
 END;
 $$;
 
--- anon (unauthenticated) callers have no business restoring; the internal check already
--- rejects them (auth.uid() is null), but revoke execute as defense in depth.
-REVOKE EXECUTE ON FUNCTION public.restore_operational_backup(jsonb) FROM anon;
+-- Functions default-grant EXECUTE to PUBLIC (which includes anon). Revoke that and
+-- grant only to authenticated; the internal check still requires an approved
+-- admin/manager. Revoking FROM PUBLIC (not just anon) is what actually drops the
+-- implicit anon grant.
+REVOKE EXECUTE ON FUNCTION public.restore_operational_backup(jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.restore_operational_backup(jsonb) TO authenticated;
