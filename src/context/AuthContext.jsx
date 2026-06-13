@@ -50,7 +50,11 @@ export const AuthProvider = ({ children }) => {
       const user = session?.user ?? null;
       setUser(user);
       if (user) {
-        if (user.id !== lastFetchedUserIdRef.current) {
+        // Refetch on sign-in and token refresh, not only when the user id changes.
+        // A same-user TOKEN_REFRESHED is our chance to pick up role/status changes
+        // (e.g. an admin approving or removing this account) without a full reload.
+        const isNewUser = user.id !== lastFetchedUserIdRef.current;
+        if (isNewUser || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           lastFetchedUserIdRef.current = user.id;
           fetchProfile(user.id);
         }

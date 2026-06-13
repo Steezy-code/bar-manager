@@ -30,9 +30,8 @@ const FullScreenLoader = ({ label }) => (
 
 // Protected wrapper that checks auth, approval status, and role hierarchy
 const ProtectedRoute = ({ children, requiredRole }) => {
-  const { user, loading } = useAuth();
-  const { profile } = useAuth();
-  const { hasRole, isPending, isRejected } = usePermissions();
+  const { user, profile, loading } = useAuth();
+  const { hasRole, isApproved } = usePermissions();
 
   if (loading) {
     return <FullScreenLoader label="Loading…" />;
@@ -46,11 +45,10 @@ const ProtectedRoute = ({ children, requiredRole }) => {
     return <FullScreenLoader label="Loading your profile…" />;
   }
 
-  if (isPending) {
-    return <Navigate to="/pending-approval" replace />;
-  }
-
-  if (isRejected) {
+  // Any non-approved status (pending, rejected, removed, or unknown) is denied app
+  // access and routed to the status screen. Gating on isApproved instead of listing
+  // statuses means a newly added status can't accidentally fall through to the app.
+  if (!isApproved) {
     return <Navigate to="/pending-approval" replace />;
   }
 
