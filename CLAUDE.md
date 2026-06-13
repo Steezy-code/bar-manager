@@ -70,7 +70,12 @@ local-storage fallback**.
 - Notifications: call `useNotifications().notify(msg, type)` for toasts and `confirmAction({...})`
   (returns a Promise<boolean>) instead of `window.confirm`. Legacy `alert()` calls are auto-rerouted to toasts.
 - Tables (via `TABLES` const + migrations): `profiles`, `inventory_items`, `shifts`, `checklists`,
-  `time_off_requests`, plus `announcements`, `roles`, `user_roles` (added by migrations; not all in `TABLES`).
+  `time_off_requests`, plus `announcements`, `roles`, `user_roles`. `TABLES` now lists all of these.
+- RLS gates every read/write on `status='approved'` **and** role (migration `20260612000000`). A user
+  whose status is later set to `pending`/`rejected`/`removed` loses DB access even if their role row still
+  says manager/admin. Route guards (`ProtectedRoute`) mirror this: any non-approved status → `/pending-approval`.
+- Backup restore runs server-side in one transaction via the `restore_operational_backup(payload)` RPC
+  (migration `20260612000100`), not client-side delete-then-insert.
 
 ## Key conventions
 - One route = one file in `src/pages/`, default-exported PascalCase component matching the filename.
@@ -78,20 +83,24 @@ local-storage fallback**.
 - Date handling in Schedule uses explicit helpers (`formatDateForSupabase`, `parseSupabaseDate`) to avoid
   TZ bugs; months are **zero-indexed in JS state but 1-indexed in date strings**. Don't mix them.
 - Name matching/dedup uses `normalizeName` (trim + lowercase) — reuse it rather than ad-hoc compares.
-- CSV in Inventory uses hand-rolled `parseCSV`/`csvEscape` (RFC-style quoting). Headers: `name,quantity,unit,threshold,category`.
+- CSV uses shared `parseCSV`/`csvEscape` in `src/lib/csv.js` (RFC-style quoting); both Inventory and Schedule
+  import/export through it. Inventory headers: `name,quantity,unit,threshold,category`.
 - Gate UI by role with `usePermissions` flags; gate routes with `<ProtectedRoute requiredRole="...">`.
 - Use `notify`/`confirmAction`, not native `alert`/`confirm`.
 
 ## Known issues / tech debt
 - **No automated tests, no linter.** Verification is manual (`TESTING.md`). Be careful with refactors.
-- `src/App.jsx` line ~82 (`settings` route) has mangled/minified JSX whitespace — works but is ugly; tidy if touched.
 - **Two migration directories** (`migrations/` and `supabase/migrations/`) with overlapping/idempotent
   `ALTER TABLE` statements and some duplicated `checklists` constraints — schema is the product of running
   all of them in chronological order. Treat the live DB as source of truth; don't assume a single clean schema.
-- `TABLES` const is incomplete (missing `announcements`, `roles`, `user_roles`) — some pages query table names as string literals.
 - `time_off_requests` has redundant columns from schema evolution (`dates`, `days`, `month`, `year`, `name`, `user_id`).
+  Stored `month` is zero-indexed (0–11), enforced by migration `20260408040000`; a 1-indexed fallback heuristic
+  remains in `Schedule`/`TimeOff` reads for resilience but `clearAll` deletes by row id to stay convention-safe.
 - `Schedule.jsx` is large (~1600 lines) and holds most scheduling complexity (build month, copy week, conflict detection).
 - "Copy Week" feature exists in code but its UI is intentionally hidden in the current release.
+- Migrations `20260612000000` (approved-status RLS) and `20260612000100` (restore RPC) are committed but must
+  be **applied to the live Supabase DB** to take effect; the client degrades safely if they aren't.
+- `FINDINGS.md` is a point-in-time audit report; see its top note for what's since been fixed.
 
 ## Where to look first
 - **Auth / login / approval / roles:** `AuthContext.jsx`, `usePermissions.js`, `App.jsx` (guards),

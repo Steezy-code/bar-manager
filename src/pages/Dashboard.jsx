@@ -197,7 +197,9 @@ export default function Dashboard() {
   const myShifts = useMemo(() => (
     todayShifts.filter(shift => {
       const staffName = normalizeText(shift.staff_name)
-      return staffName && userMatchTerms.some(term => staffName === term || staffName.includes(term) || term.includes(staffName))
+      // Exact normalized match only. Substring matching previously let "Al" match
+      // "Alex" (and vice-versa), surfacing the wrong person's shifts.
+      return staffName && userMatchTerms.includes(staffName)
     })
   ), [todayShifts, userMatchTerms])
 
