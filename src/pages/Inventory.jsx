@@ -68,24 +68,23 @@ export default function Inventory() {
   const [categoryFilter, setCategoryFilter] = useState('all')
   const categoryDetectedRef = useRef(false)
 
+  // Stable identity (no state deps) so it doesn't re-create fetchItems and trigger a
+  // second fetch after the first detection flips categorySupported.
   const detectCategorySupport = useCallback(async () => {
-    if (categoryDetectedRef.current) return categorySupported
+    if (categoryDetectedRef.current) return
     try {
       const { error } = await supabase
         .from(TABLES.INVENTORY)
         .select('category')
         .limit(1)
 
-      const supported = !error
-      setCategorySupported(supported)
-      categoryDetectedRef.current = true
-      return supported
+      setCategorySupported(!error)
     } catch (err) {
       setCategorySupported(false)
+    } finally {
       categoryDetectedRef.current = true
-      return false
     }
-  }, [categorySupported])
+  }, [])
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
