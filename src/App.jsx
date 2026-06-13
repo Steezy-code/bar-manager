@@ -91,7 +91,11 @@ const AppRouter = () => {
         <Route path="schedule" element={<Schedule />} />
         <Route path="checklists" element={<Checklists />} />
         <Route path="timeoff" element={<TimeOff />} />
-        <Route path="settings" element={          <ProtectedRoute requiredRole="manager">            <Settings />          </ProtectedRoute>        } />
+        <Route path="settings" element={
+          <ProtectedRoute requiredRole="manager">
+            <Settings />
+          </ProtectedRoute>
+        } />
         {/* Admin-only routes (example) */}
         <Route path="admin" element={
           <ProtectedRoute requiredRole="admin">
