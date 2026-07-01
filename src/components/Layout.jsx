@@ -1,25 +1,34 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
 import { HomeIcon, CubeIcon, CalendarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, Cog6ToothIcon, Bars3Icon, XMarkIcon, UserIcon, ArrowRightOnRectangleIcon, ShieldCheckIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
 import { supabase } from '../lib/supabase'
 import { TABLES } from '../lib/supabase'
+import Modal from './Modal'
 
 const navItems = [
-  { name: 'Dashboard', path: '/', icon: HomeIcon },
-  { name: 'Inventory', path: '/inventory', icon: CubeIcon },
-  { name: 'Schedule', path: '/schedule', icon: CalendarIcon },
-  { name: 'Checklists', path: '/checklists', icon: ClipboardDocumentCheckIcon },
-  { name: 'Time Off', path: '/timeoff', icon: UserGroupIcon },
-  { name: 'Settings', path: '/settings', icon: Cog6ToothIcon },
+  { name: 'Dashboard', path: '/app', icon: HomeIcon },
+  { name: 'Inventory', path: '/app/inventory', icon: CubeIcon },
+  { name: 'Schedule', path: '/app/schedule', icon: CalendarIcon },
+  { name: 'Checklists', path: '/app/checklists', icon: ClipboardDocumentCheckIcon },
+  { name: 'Time Off', path: '/app/timeoff', icon: UserGroupIcon },
+  { name: 'Settings', path: '/app/settings', icon: Cog6ToothIcon },
 ]
 
 export default function Layout({ user, onLogout }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [pendingTimeOffCount, setPendingTimeOffCount] = useState(0)
   const [pendingUsersCount, setPendingUsersCount] = useState(0)
+  // ponytail: localStorage flag, no store/provider.
+  const [showWelcome, setShowWelcome] = useState(() => {
+    try { return localStorage.getItem('bm-demo-welcomed') !== '1' } catch { return true }
+  })
+  const dismissWelcome = () => {
+    try { localStorage.setItem('bm-demo-welcomed', '1') } catch { /* private mode */ }
+    setShowWelcome(false)
+  }
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const { profile } = useAuth()
@@ -64,15 +73,15 @@ export default function Layout({ user, onLogout }) {
     if (onLogout) {
       await onLogout()
     }
-    navigate('/login')
+    navigate('/')
   }
 
   // Filter nav items based on role
   const filteredNavItems = navItems.filter(item => {
-    if (item.path === '/inventory') {
+    if (item.path === '/app/inventory') {
       return hasRole('manager') // manager or admin
     }
-    if (item.path === '/settings') {
+    if (item.path === '/app/settings') {
       return hasRole('manager') // manager or admin
     }
     return true
@@ -80,16 +89,16 @@ export default function Layout({ user, onLogout }) {
 
   const allNavItems = [...filteredNavItems]
   if (isApproved && hasRole('admin')) {
-    allNavItems.push({ name: 'Admin', path: '/admin', icon: ShieldCheckIcon })
+    allNavItems.push({ name: 'Admin', path: '/app/admin', icon: ShieldCheckIcon })
   }
 
   const activeNavIndex = allNavItems.slice(0, 5).findIndex(item =>
-    item.path === '/' ? pathname === '/' : pathname.startsWith(item.path)
+    item.path === '/app' ? pathname === '/app' : pathname.startsWith(item.path)
   )
 
   const navBadges = {
-    '/timeoff': pendingTimeOffCount > 0 ? pendingTimeOffCount : null,
-    '/admin': pendingUsersCount > 0 ? pendingUsersCount : null,
+    '/app/timeoff': pendingTimeOffCount > 0 ? pendingTimeOffCount : null,
+    '/app/admin': pendingUsersCount > 0 ? pendingUsersCount : null,
   }
 
   return (
@@ -102,7 +111,7 @@ export default function Layout({ user, onLogout }) {
         </div>
         <nav className="p-4 space-y-2">
           {allNavItems.map((item) => (
-            <NavLink key={item.path} to={item.path} onClick={() => setSidebarOpen(false)}
+            <NavLink key={item.path} to={item.path} end={item.path === '/app'} onClick={() => setSidebarOpen(false)}
               className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-lg transition ${isActive ? 'bg-bar-accent text-white' : 'text-gray-400 hover:bg-bar-blue hover:text-white'}`}>
               <item.icon className="w-5 h-5" />
               <span className="flex-1">{item.name}</span>
@@ -138,6 +147,10 @@ export default function Layout({ user, onLogout }) {
         )}
       </div>
       <div className="lg:ml-64 print:ml-0">
+        <div className="flex items-center justify-between gap-3 bg-bar-accent/15 border-b border-bar-accent/30 px-4 py-2 text-xs text-bar-accent print:hidden">
+          <span className="font-medium">🍻 Portfolio demo — sample data, nothing is saved.</span>
+          <Link to="/" className="shrink-0 font-semibold hover:underline">← Overview</Link>
+        </div>
         <header className="lg:hidden flex items-center justify-between px-4 pb-4 pt-safe-app bg-bar-card border-b border-bar-blue print:hidden">
           <button onClick={() => setSidebarOpen(true)}><Bars3Icon className="w-6 h-6" /></button>
           <h1 className="text-lg font-bold text-bar-accent">BarManager</h1>
@@ -172,7 +185,7 @@ export default function Layout({ user, onLogout }) {
           </div>
         )}
         {allNavItems.slice(0, 5).map((item) => (
-          <NavLink key={item.path} to={item.path} className={({ isActive }) => `flex flex-1 flex-col items-center justify-center gap-1 min-h-touch ${isActive ? 'text-bar-accent' : 'text-gray-500'}`}>
+          <NavLink key={item.path} to={item.path} end={item.path === '/app'} className={({ isActive }) => `flex flex-1 flex-col items-center justify-center gap-1 min-h-touch ${isActive ? 'text-bar-accent' : 'text-gray-500'}`}>
             <div className="relative">
               <item.icon className="w-5 h-5" />
               {navBadges[item.path] && (
@@ -185,6 +198,20 @@ export default function Layout({ user, onLogout }) {
           </NavLink>
         ))}
       </nav>
+
+      <Modal open={showWelcome} onClose={dismissWelcome} title="Welcome to the BarManager demo 👋">
+        <div className="space-y-3 text-sm text-gray-300">
+          <p>You're signed in as an admin on a fully interactive demo — no login, no backend. All data is sample data held in memory, so edits stick while you browse and reset on refresh.</p>
+          <p className="font-semibold text-white">Try poking around:</p>
+          <ul className="list-disc space-y-1 pl-5">
+            <li><span className="text-white">Schedule</span> — add a shift or build a month</li>
+            <li><span className="text-white">Checklists</span> — tick off opening tasks</li>
+            <li><span className="text-white">Inventory</span> — adjust quantities, watch low-stock alerts</li>
+            <li><span className="text-white">Admin</span> — see the role &amp; approval management</li>
+          </ul>
+        </div>
+        <button onClick={dismissWelcome} className="btn-primary mt-5 w-full">Start exploring</button>
+      </Modal>
     </div>
   )
 }

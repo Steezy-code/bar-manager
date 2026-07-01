@@ -50,7 +50,11 @@ export const AuthProvider = ({ children }) => {
       const user = session?.user ?? null;
       setUser(user);
       if (user) {
-        if (user.id !== lastFetchedUserIdRef.current) {
+        // Refetch on sign-in and token refresh, not only when the user id changes.
+        // A same-user TOKEN_REFRESHED is our chance to pick up role/status changes
+        // (e.g. an admin approving or removing this account) without a full reload.
+        const isNewUser = user.id !== lastFetchedUserIdRef.current;
+        if (isNewUser || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           lastFetchedUserIdRef.current = user.id;
           fetchProfile(user.id);
         }
@@ -79,6 +83,16 @@ export const AuthProvider = ({ children }) => {
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    // Drop cached Supabase REST responses (PWA NetworkFirst cache, 'supabase-data')
+    // so the next account signing in on this device can't be served the previous
+    // user's RLS-scoped data from cache while offline or during a network timeout.
+    if (typeof caches !== 'undefined') {
+      try {
+        await caches.delete('supabase-data');
+      } catch {
+        // Cache API unavailable or blocked — nothing to clean up.
+      }
+    }
   };
 
   const value = {
