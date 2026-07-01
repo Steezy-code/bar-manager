@@ -36,7 +36,9 @@ const ProtectedRoute = ({ children, requiredRole }) => {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    // Login/signup aren't routed in the demo build (the mock client always hands out
+    // a session), so send unauthenticated visitors back to the landing page.
+    return <Navigate to="/" replace />;
   }
 
   if (!profile) {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
 import { HomeIcon, CubeIcon, CalendarIcon, ClipboardDocumentCheckIcon, UserGroupIcon, Cog6ToothIcon, Bars3Icon, XMarkIcon, UserIcon, ArrowRightOnRectangleIcon, ShieldCheckIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
@@ -30,6 +30,7 @@ export default function Layout({ user, onLogout }) {
     setShowWelcome(false)
   }
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const { profile } = useAuth()
   const { hasRole, isApproved } = usePermissions()
 
@@ -77,10 +78,10 @@ export default function Layout({ user, onLogout }) {
 
   // Filter nav items based on role
   const filteredNavItems = navItems.filter(item => {
-    if (item.path === '/inventory') {
+    if (item.path === '/app/inventory') {
       return hasRole('manager') // manager or admin
     }
-    if (item.path === '/settings') {
+    if (item.path === '/app/settings') {
       return hasRole('manager') // manager or admin
     }
     return true
@@ -90,6 +91,10 @@ export default function Layout({ user, onLogout }) {
   if (isApproved && hasRole('admin')) {
     allNavItems.push({ name: 'Admin', path: '/app/admin', icon: ShieldCheckIcon })
   }
+
+  const activeNavIndex = allNavItems.slice(0, 5).findIndex(item =>
+    item.path === '/app' ? pathname === '/app' : pathname.startsWith(item.path)
+  )
 
   const navBadges = {
     '/app/timeoff': pendingTimeOffCount > 0 ? pendingTimeOffCount : null,
@@ -166,6 +171,19 @@ export default function Layout({ user, onLogout }) {
         <main className="px-4 pt-4 pb-safe-content lg:p-8 lg:pb-8 print:p-2"><Outlet /></main>
       </div>
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-bar-card border-t border-bar-blue flex justify-around pt-3 pb-safe-nav z-40 print:hidden">
+        {activeNavIndex >= 0 && (
+          <div
+            className="pointer-events-none absolute left-0 top-2 h-11 w-1/5 px-0.5 transition-transform duration-300"
+            style={{
+              transform: `translateX(${activeNavIndex * 100}%)`,
+              transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+            }}
+          >
+            <div className="h-full w-full rounded-full ring-1 ring-inset ring-white/[0.15]"
+              style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.06) 100%)' }}
+            />
+          </div>
+        )}
         {allNavItems.slice(0, 5).map((item) => (
           <NavLink key={item.path} to={item.path} end={item.path === '/app'} className={({ isActive }) => `flex flex-1 flex-col items-center justify-center gap-1 min-h-touch ${isActive ? 'text-bar-accent' : 'text-gray-500'}`}>
             <div className="relative">

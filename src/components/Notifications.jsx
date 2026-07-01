@@ -55,7 +55,7 @@ export function NotificationsProvider({ children }) {
         {toasts.map(toast => (
           <div
             key={toast.id}
-            className={`rounded-lg border p-4 shadow-lg ${
+            className={`animate-toast-in rounded-lg border p-4 shadow-lg ${
               toast.type === 'error'
                 ? 'border-red-500 bg-red-950 text-red-100'
                 : toast.type === 'success'
