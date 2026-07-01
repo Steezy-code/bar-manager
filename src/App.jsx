@@ -7,9 +7,7 @@ import Schedule from './pages/Schedule';
 import Checklists from './pages/Checklists';
 import TimeOff from './pages/TimeOff';
 import Settings from './pages/Settings';
-import Login from './pages/Login';
-import SignUp from './pages/SignUp';
-import PendingApproval from './pages/PendingApproval';
+import Landing from './pages/Landing';
 import Admin from './pages/Admin';
 import Layout from './components/Layout';
 import { NotificationsProvider } from './components/Notifications';
@@ -61,23 +59,16 @@ const ProtectedRoute = ({ children, requiredRole }) => {
 
 // Main router component
 const AppRouter = () => {
-  const { user, profile, signOut } = useAuth();
-
-  const homeDestination = !user
-    ? '/login'
-    : profile?.status === 'approved'
-      ? '/'
-      : '/pending-approval';
+  const { user, signOut } = useAuth();
 
   return (
     <Routes>
-      {/* Public routes */}
-      <Route path="/login" element={!user ? <Login /> : <Navigate to={homeDestination} replace />} />
-      <Route path="/signup" element={!user ? <SignUp /> : <Navigate to={homeDestination} replace />} />
-      <Route path="/pending-approval" element={user ? <PendingApproval /> : <Navigate to="/login" replace />} />
-      
-      {/* Protected routes */}
-      <Route path="/" element={
+      {/* Public front door — the showcase landing page */}
+      <Route path="/" element={<Landing />} />
+
+      {/* The live demo app. Guards stay in place; the demo session is an approved
+          admin, so they all pass and admin/manager-only routes are reachable. */}
+      <Route path="/app" element={
         <ProtectedRoute>
           <Layout user={user} onLogout={signOut} />
         </ProtectedRoute>
@@ -96,14 +87,13 @@ const AppRouter = () => {
             <Settings />
           </ProtectedRoute>
         } />
-        {/* Admin-only routes (example) */}
         <Route path="admin" element={
           <ProtectedRoute requiredRole="admin">
             <Admin />
           </ProtectedRoute>
         } />
       </Route>
-      <Route path="*" element={<Navigate to="/" />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };
