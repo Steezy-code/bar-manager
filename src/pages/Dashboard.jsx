@@ -212,7 +212,7 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="space-y-4 pb-24 lg:pb-0">
+      <div className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div className="space-y-2">
             <Skeleton className="h-7 w-40" />
@@ -265,7 +265,7 @@ export default function Dashboard() {
   ]
 
   return (
-    <div className="space-y-4 pb-24 lg:pb-0">
+    <div className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">{greeting}</h1>
@@ -322,9 +322,9 @@ export default function Dashboard() {
           )}
 
           <div className="grid gap-2 sm:grid-cols-3">
-            <Link to="/schedule" className="btn-primary justify-center text-center">View schedule</Link>
-            <Link to="/checklists" className="btn-secondary justify-center text-center">{checklistPercent}% checklists</Link>
-            <Link to="/timeoff" className="btn-secondary justify-center text-center">Time off</Link>
+            <Link to="/app/schedule" className="btn-primary justify-center text-center">View schedule</Link>
+            <Link to="/app/checklists" className="btn-secondary justify-center text-center">{checklistPercent}% checklists</Link>
+            <Link to="/app/timeoff" className="btn-secondary justify-center text-center">Time off</Link>
           </div>
         </section>
       )}
@@ -336,7 +336,7 @@ export default function Dashboard() {
               <h2 className="text-lg font-bold">Today&apos;s Schedule</h2>
               <p className="text-sm text-gray-400">{todayShifts.length} scheduled</p>
             </div>
-            <Link to="/schedule" className="text-sm font-semibold text-bar-accent hover:text-white">Open</Link>
+            <Link to="/app/schedule" className="text-sm font-semibold text-bar-accent hover:text-white">Open</Link>
           </div>
           {todayShifts.length === 0 ? (
             <p className="rounded-lg bg-bar-blue/30 p-3 text-gray-400">No shifts scheduled for today.</p>
@@ -344,7 +344,7 @@ export default function Dashboard() {
             <div className="space-y-2">
               {todayShifts.slice(0, 6).map(shift => <ShiftRow key={shift.id} shift={shift} />)}
               {todayShifts.length > 6 && (
-                <Link to="/schedule" className="block rounded-lg bg-bar-blue/20 p-3 text-center text-sm font-semibold text-bar-accent hover:bg-bar-blue/40">
+                <Link to="/app/schedule" className="block rounded-lg bg-bar-blue/20 p-3 text-center text-sm font-semibold text-bar-accent hover:bg-bar-blue/40">
                   View {todayShifts.length - 6} more shifts
                 </Link>
               )}
@@ -358,11 +358,11 @@ export default function Dashboard() {
             <p className="text-sm text-gray-400">{checklistStatus.completed}/{checklistStatus.total} tasks complete</p>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-bar-blue">
-            <div className="h-full rounded-full bg-bar-accent" style={{ width: `${checklistPercent}%` }} />
+            <div className="h-full rounded-full bg-bar-accent transition-[width] duration-700 ease-out" style={{ width: `${checklistPercent}%` }} />
           </div>
           <div className="flex items-center justify-between gap-3 rounded-lg bg-bar-blue/30 p-3">
             <span className="text-sm text-gray-300">{checklistRemaining ? `${checklistRemaining} remaining` : 'All caught up'}</span>
-            <Link to="/checklists" className="text-sm font-semibold text-bar-accent hover:text-white">Open checklists</Link>
+            <Link to="/app/checklists" className="text-sm font-semibold text-bar-accent hover:text-white">Open checklists</Link>
           </div>
           {canManageInventory && lowItems.length > 0 && (
             <div className="rounded-lg border border-red-500/60 bg-red-500/15 p-3">
@@ -378,7 +378,7 @@ export default function Dashboard() {
                   </div>
                 ))}
               </div>
-              <Link to="/inventory" className="mt-3 block text-sm font-semibold text-bar-accent hover:text-white">Open inventory</Link>
+              <Link to="/app/inventory" className="mt-3 block text-sm font-semibold text-bar-accent hover:text-white">Open inventory</Link>
             </div>
           )}
         </section>
