@@ -19,20 +19,13 @@ import EmptyState from '../components/EmptyState'
 import { SkeletonGrid } from '../components/Skeleton'
 import { useAppRefresh } from '../hooks/usePullToRefresh'
 import { CubeIcon, XMarkIcon, MinusIcon } from '@heroicons/react/24/outline'
+import { parseCSV, csvEscape } from '../lib/csv'
 
 const DEFAULT_CATEGORY = 'drinks'
 const CSV_HEADERS = ['name', 'quantity', 'unit', 'threshold', 'category']
 const emptyItem = { name: '', quantity: 0, unit: '', threshold: 5, category: DEFAULT_CATEGORY }
 
 const normalizeName = (value) => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase()
-
-const csvEscape = (value) => {
-  const text = String(value ?? '')
-  if (/[",\r\n]/.test(text)) {
-    return `"${text.replace(/"/g, '""')}"`
-  }
-  return text
-}
 
 const downloadTextFile = (contents, filename, type = 'text/csv') => {
   const blob = new Blob([contents], { type })
@@ -42,42 +35,6 @@ const downloadTextFile = (contents, filename, type = 'text/csv') => {
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
-}
-
-const parseCSV = (text) => {
-  const rows = []
-  let row = []
-  let field = ''
-  let inQuotes = false
-
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i]
-    const next = text[i + 1]
-
-    if (char === '"') {
-      if (inQuotes && next === '"') {
-        field += '"'
-        i++
-      } else {
-        inQuotes = !inQuotes
-      }
-    } else if (char === ',' && !inQuotes) {
-      row.push(field)
-      field = ''
-    } else if ((char === '\n' || char === '\r') && !inQuotes) {
-      if (char === '\r' && next === '\n') i++
-      row.push(field)
-      if (row.some(value => String(value).trim() !== '')) rows.push(row)
-      row = []
-      field = ''
-    } else {
-      field += char
-    }
-  }
-
-  row.push(field)
-  if (row.some(value => String(value).trim() !== '')) rows.push(row)
-  return rows
 }
 
 const parseInventoryNumber = (value, fallback, label, rowNumber) => {
@@ -111,24 +68,23 @@ export default function Inventory() {
   const [categoryFilter, setCategoryFilter] = useState('all')
   const categoryDetectedRef = useRef(false)
 
+  // Stable identity (no state deps) so it doesn't re-create fetchItems and trigger a
+  // second fetch after the first detection flips categorySupported.
   const detectCategorySupport = useCallback(async () => {
-    if (categoryDetectedRef.current) return categorySupported
+    if (categoryDetectedRef.current) return
     try {
       const { error } = await supabase
         .from(TABLES.INVENTORY)
         .select('category')
         .limit(1)
 
-      const supported = !error
-      setCategorySupported(supported)
-      categoryDetectedRef.current = true
-      return supported
+      setCategorySupported(!error)
     } catch (err) {
       setCategorySupported(false)
+    } finally {
       categoryDetectedRef.current = true
-      return false
     }
-  }, [categorySupported])
+  }, [])
 
   const fetchItems = useCallback(async () => {
     setLoading(true)

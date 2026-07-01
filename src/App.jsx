@@ -7,9 +7,7 @@ import Schedule from './pages/Schedule';
 import Checklists from './pages/Checklists';
 import TimeOff from './pages/TimeOff';
 import Settings from './pages/Settings';
-import Login from './pages/Login';
-import SignUp from './pages/SignUp';
-import PendingApproval from './pages/PendingApproval';
+import Landing from './pages/Landing';
 import Admin from './pages/Admin';
 import Layout from './components/Layout';
 import { NotificationsProvider } from './components/Notifications';
@@ -30,27 +28,27 @@ const FullScreenLoader = ({ label }) => (
 
 // Protected wrapper that checks auth, approval status, and role hierarchy
 const ProtectedRoute = ({ children, requiredRole }) => {
-  const { user, loading } = useAuth();
-  const { profile } = useAuth();
-  const { hasRole, isPending, isRejected } = usePermissions();
+  const { user, profile, loading } = useAuth();
+  const { hasRole, isApproved } = usePermissions();
 
   if (loading) {
     return <FullScreenLoader label="Loading…" />;
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    // Login/signup aren't routed in the demo build (the mock client always hands out
+    // a session), so send unauthenticated visitors back to the landing page.
+    return <Navigate to="/" replace />;
   }
 
   if (!profile) {
     return <FullScreenLoader label="Loading your profile…" />;
   }
 
-  if (isPending) {
-    return <Navigate to="/pending-approval" replace />;
-  }
-
-  if (isRejected) {
+  // Any non-approved status (pending, rejected, removed, or unknown) is denied app
+  // access and routed to the status screen. Gating on isApproved instead of listing
+  // statuses means a newly added status can't accidentally fall through to the app.
+  if (!isApproved) {
     return <Navigate to="/pending-approval" replace />;
   }
 
@@ -63,23 +61,16 @@ const ProtectedRoute = ({ children, requiredRole }) => {
 
 // Main router component
 const AppRouter = () => {
-  const { user, profile, signOut } = useAuth();
-
-  const homeDestination = !user
-    ? '/login'
-    : profile?.status === 'approved'
-      ? '/'
-      : '/pending-approval';
+  const { user, signOut } = useAuth();
 
   return (
     <Routes>
-      {/* Public routes */}
-      <Route path="/login" element={!user ? <Login /> : <Navigate to={homeDestination} replace />} />
-      <Route path="/signup" element={!user ? <SignUp /> : <Navigate to={homeDestination} replace />} />
-      <Route path="/pending-approval" element={user ? <PendingApproval /> : <Navigate to="/login" replace />} />
-      
-      {/* Protected routes */}
-      <Route path="/" element={
+      {/* Public front door — the showcase landing page */}
+      <Route path="/" element={<Landing />} />
+
+      {/* The live demo app. Guards stay in place; the demo session is an approved
+          admin, so they all pass and admin/manager-only routes are reachable. */}
+      <Route path="/app" element={
         <ProtectedRoute>
           <Layout user={user} onLogout={signOut} />
         </ProtectedRoute>
@@ -93,15 +84,18 @@ const AppRouter = () => {
         <Route path="schedule" element={<Schedule />} />
         <Route path="checklists" element={<Checklists />} />
         <Route path="timeoff" element={<TimeOff />} />
-        <Route path="settings" element={          <ProtectedRoute requiredRole="manager">            <Settings />          </ProtectedRoute>        } />
-        {/* Admin-only routes (example) */}
+        <Route path="settings" element={
+          <ProtectedRoute requiredRole="manager">
+            <Settings />
+          </ProtectedRoute>
+        } />
         <Route path="admin" element={
           <ProtectedRoute requiredRole="admin">
             <Admin />
           </ProtectedRoute>
         } />
       </Route>
-      <Route path="*" element={<Navigate to="/" />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };
