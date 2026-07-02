@@ -46,6 +46,15 @@ const getRoleColor = (role) => {
   }
 }
 
+// Role → color key, since the calendar's shift chips otherwise carry the role
+// distinction through hue alone.
+const ROLE_LEGEND = [
+  { role: 'bartender', label: 'Bartender' },
+  { role: 'server', label: 'Server' },
+  { role: 'cook', label: 'Cook' },
+  { role: 'manager', label: 'Manager' },
+]
+
 // Helper to convert day/month/year to Supabase date string (YYYY-MM-DD)
 // Helper to convert year, zero-indexed month (0-11), day (1-31) to Supabase date string (YYYY-MM-DD)
 const formatDateForSupabase = (year, monthZeroIndexed, day) => {
@@ -1122,6 +1131,17 @@ export default function Schedule() {
         <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-bar-dark to-transparent md:hidden" />
       </div>
 
+      {/* Role color legend — the calendar's shift chips are color-coded by role;
+          name each color so it isn't hue-only. */}
+      <div className="mb-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-gray-400 md:justify-start">
+        {ROLE_LEGEND.map(({ role, label }) => (
+          <span key={role} className="flex items-center gap-1.5">
+            <span className={`h-2 w-2 rounded-full ${getRoleColor(role)}`} />
+            {label}
+          </span>
+        ))}
+      </div>
+
       {view === 'week' ? (
         <div className="space-y-6">
           {/* Day-stacked list for week view */}
@@ -1425,9 +1445,9 @@ export default function Schedule() {
               <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-bar-blue/10 px-3 py-2 text-sm">
                 <span className="text-gray-300">{builderShiftGroups.length} employees, {builderShifts.length} shifts</span>
                 <div className="flex gap-2">
-                  <button onClick={expandAllBuilderGroups} className="text-bar-accent hover:text-white">Expand all</button>
+                  <button onClick={expandAllBuilderGroups} className="text-bar-accent-light hover:text-white">Expand all</button>
                   <span className="text-gray-600">/</span>
-                  <button onClick={collapseAllBuilderGroups} className="text-bar-accent hover:text-white">Collapse all</button>
+                  <button onClick={collapseAllBuilderGroups} className="text-bar-accent-light hover:text-white">Collapse all</button>
                 </div>
               </div>
             )}

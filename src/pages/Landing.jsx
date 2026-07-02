@@ -57,7 +57,7 @@ const MockRow = ({ title, detail, action, tone = 'default' }) => {
         <div className="truncate text-sm font-semibold text-white">{title}</div>
         <div className="truncate text-xs text-gray-400">{detail}</div>
       </div>
-      <span className="shrink-0 rounded-md bg-bar-dark px-2 py-1 text-[11px] font-semibold text-bar-accent">{action}</span>
+      <span className="shrink-0 rounded-md bg-bar-dark px-2 py-1 text-[11px] font-semibold text-bar-accent-light">{action}</span>
     </div>
   )
 }
@@ -155,10 +155,10 @@ const mockScreens = [
 export default function Landing() {
   return (
     <div className="min-h-screen bg-bar-dark text-white">
-      <div className="mx-auto max-w-5xl px-5 py-16 sm:py-24">
-        {/* Hero */}
-        <header className="text-center">
-          <div className="mb-4 text-5xl">🍻</div>
+      <div className="mx-auto max-w-5xl px-5 pb-16 sm:pb-24">
+        {/* Hero — kept tight so the primary CTA and a peek of the real UI both land
+            above the fold; text wordmark instead of an emoji reads more like a product. */}
+        <header className="pt-16 pb-10 text-center">
           <h1 className="text-4xl font-bold sm:text-5xl">
             Bar<span className="text-bar-accent">Manager</span>
           </h1>
@@ -166,24 +166,40 @@ export default function Landing() {
             A role-based operations hub for a small bar or restaurant team — scheduling,
             inventory, daily checklists, and time-off, all in one installable app.
           </p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link to="/app" className="btn-primary px-6 py-3 text-base">
               Launch live demo <ArrowRightIcon className="h-5 w-5" />
             </Link>
-            <a href={REPO_URL} target="_blank" rel="noreferrer" className="btn-secondary px-6 py-3 text-base">
+            <a href={REPO_URL} target="_blank" rel="noreferrer" className="btn-ghost px-6 py-3 text-base">
               View source
             </a>
           </div>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-            <Chip>Live demo · no signup</Chip>
-            <Chip>Sample data</Chip>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
             <Chip>React · Supabase · Tailwind</Chip>
             <Chip>Installable PWA</Chip>
           </div>
         </header>
 
+        {/* Screenshot peek: a cropped preview of the real UI, teasing "How it works"
+            below without needing a scroll. Reuses mockScreens directly (rather than a
+            second hand-typed copy) so these numbers can never drift out of sync with
+            the full section further down. */}
+        <div className="relative -mt-2 mx-auto max-w-3xl overflow-hidden rounded-t-xl">
+          <div className="pointer-events-none grid max-h-[210px] gap-5 overflow-hidden sm:grid-cols-2">
+            {mockScreens.slice(0, 2).map(({ key, label, render: Render }) => (
+              <MockWindow key={key} label={label}>
+                <Render />
+              </MockWindow>
+            ))}
+          </div>
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-b from-transparent to-bar-dark" />
+          <p className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-xs italic text-gray-500">
+            ↓ real, clickable UI continues below the fold
+          </p>
+        </div>
+
         {/* How it works — real screens, real seed data, no screenshots needed */}
-        <section className="mt-20">
+        <section className="mt-16">
           <h2 className="text-center text-2xl font-bold">How it works</h2>
           <p className="mx-auto mt-2 max-w-xl text-center text-sm text-gray-400">
             A peek at the live demo. Every one of these is real, clickable UI — not a mockup.
@@ -244,7 +260,7 @@ export default function Landing() {
             <Link to="/app" className="btn-primary px-6 py-3 text-base">
               Launch live demo <ArrowRightIcon className="h-5 w-5" />
             </Link>
-            <a href={REPO_URL} target="_blank" rel="noreferrer" className="btn-secondary px-6 py-3 text-base">
+            <a href={REPO_URL} target="_blank" rel="noreferrer" className="btn-ghost px-6 py-3 text-base">
               View source
             </a>
           </div>
