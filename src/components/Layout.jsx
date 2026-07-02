@@ -127,7 +127,10 @@ export default function Layout({ user, onLogout }) {
       <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-bar-card border-r border-bar-blue transform transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex items-center justify-between p-4 border-b border-bar-blue">
           <h1 className="text-xl font-bold text-bar-accent">🍻 BarManager</h1>
-          <button onClick={() => setSidebarOpen(false)}><XMarkIcon className="w-6 h-6" /></button>
+          {/* Sidebar is a mobile-only drawer (permanently pinned open at lg: via
+              lg:translate-x-0 above) — hide the close button there since clicking it
+              can't actually collapse anything and would look like a dead control. */}
+          <button className="lg:hidden" onClick={() => setSidebarOpen(false)}><XMarkIcon className="w-6 h-6" /></button>
         </div>
         <nav className="p-4 space-y-2">
           {allNavItems.map((item) => (
