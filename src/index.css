@@ -180,7 +180,7 @@ input, select, textarea {
     @apply btn bg-bar-blue text-white hover:bg-blue-700;
   }
   .btn-ghost {
-    @apply btn bg-transparent text-gray-300 hover:bg-bar-blue hover:text-white;
+    @apply btn bg-transparent text-gray-300 border border-bar-blue hover:bg-bar-blue hover:text-white;
   }
   .btn-danger {
     @apply btn bg-red-600 text-white hover:bg-red-500;

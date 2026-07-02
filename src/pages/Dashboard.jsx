@@ -66,24 +66,28 @@ const StatusPill = ({ children, tone = 'default' }) => {
   )
 }
 
+// Status swatch: a tinted background behind the icon, not just a colored icon —
+// tone reads from background value + icon shape, not hue alone (colorblind-safe).
 const ActionRow = ({ icon: Icon, title, detail, to, actionLabel, tone = 'default' }) => {
-  const iconClass =
+  const swatchClass =
     tone === 'danger'
-      ? 'text-red-300'
+      ? 'bg-bar-danger-bg text-bar-accent-light'
       : tone === 'warning'
-        ? 'text-yellow-200'
+        ? 'bg-bar-warning-bg text-bar-warning'
         : tone === 'success'
-          ? 'text-green-300'
-          : 'text-bar-accent'
+          ? 'bg-bar-success-bg text-bar-success'
+          : 'bg-bar-blue/40 text-bar-accent-light'
 
   return (
     <div className="flex items-center gap-3 rounded-lg bg-bar-blue/30 p-3">
-      <Icon className={`h-5 w-5 shrink-0 ${iconClass}`} />
+      <span className={`flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[7px] ${swatchClass}`}>
+        <Icon className="h-4 w-4" />
+      </span>
       <div className="min-w-0 flex-1">
         <div className="font-semibold leading-tight">{title}</div>
         <div className="mt-0.5 truncate text-sm text-gray-400">{detail}</div>
       </div>
-      <Link to={to} className="shrink-0 rounded-lg bg-bar-card px-3 py-2 text-sm font-semibold text-bar-accent hover:bg-bar-blue">
+      <Link to={to} className="shrink-0 rounded-lg bg-bar-card px-3 py-2 text-sm font-semibold text-bar-accent-light hover:bg-bar-blue">
         {actionLabel}
       </Link>
     </div>
@@ -336,7 +340,7 @@ export default function Dashboard() {
               <h2 className="text-lg font-bold">Today&apos;s Schedule</h2>
               <p className="text-sm text-gray-400">{todayShifts.length} scheduled</p>
             </div>
-            <Link to="/app/schedule" className="text-sm font-semibold text-bar-accent hover:text-white">Open</Link>
+            <Link to="/app/schedule" className="text-sm font-semibold text-bar-accent-light hover:text-white">Open</Link>
           </div>
           {todayShifts.length === 0 ? (
             <p className="rounded-lg bg-bar-blue/30 p-3 text-gray-400">No shifts scheduled for today.</p>
@@ -344,7 +348,7 @@ export default function Dashboard() {
             <div className="space-y-2">
               {todayShifts.slice(0, 6).map(shift => <ShiftRow key={shift.id} shift={shift} />)}
               {todayShifts.length > 6 && (
-                <Link to="/app/schedule" className="block rounded-lg bg-bar-blue/20 p-3 text-center text-sm font-semibold text-bar-accent hover:bg-bar-blue/40">
+                <Link to="/app/schedule" className="block rounded-lg bg-bar-blue/20 p-3 text-center text-sm font-semibold text-bar-accent-light hover:bg-bar-blue/40">
                   View {todayShifts.length - 6} more shifts
                 </Link>
               )}
@@ -362,7 +366,7 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center justify-between gap-3 rounded-lg bg-bar-blue/30 p-3">
             <span className="text-sm text-gray-300">{checklistRemaining ? `${checklistRemaining} remaining` : 'All caught up'}</span>
-            <Link to="/app/checklists" className="text-sm font-semibold text-bar-accent hover:text-white">Open checklists</Link>
+            <Link to="/app/checklists" className="text-sm font-semibold text-bar-accent-light hover:text-white">Open checklists</Link>
           </div>
           {canManageInventory && lowItems.length > 0 && (
             <div className="rounded-lg border border-red-500/60 bg-red-500/15 p-3">
@@ -378,7 +382,7 @@ export default function Dashboard() {
                   </div>
                 ))}
               </div>
-              <Link to="/app/inventory" className="mt-3 block text-sm font-semibold text-bar-accent hover:text-white">Open inventory</Link>
+              <Link to="/app/inventory" className="mt-3 block text-sm font-semibold text-bar-accent-light hover:text-white">Open inventory</Link>
             </div>
           )}
         </section>

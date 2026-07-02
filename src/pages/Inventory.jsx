@@ -567,7 +567,11 @@ export default function Inventory() {
                 <div>
                   <h3 className="font-semibold">{highlight(i.name, search.trim())}</h3>
                   {categorySupported && i.category && <p className="text-xs text-gray-400">{i.category}</p>}
-                  {isLow && <p className="text-xs text-red-400">Low stock (min: {i.threshold})</p>}
+                  {isLow && (
+                    <p className="flex items-center gap-1 text-xs text-red-400">
+                      <ExclamationTriangleIcon className="h-3 w-3" /> Low stock (min: {i.threshold})
+                    </p>
+                  )}
                 </div>
                 <div className="flex gap-1">
                   <IconButton icon={PencilSquareIcon} label={`Edit ${i.name}`} onClick={() => setEditingItem({ ...i, category: i.category || DEFAULT_CATEGORY })} />

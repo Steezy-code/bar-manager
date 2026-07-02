@@ -12,6 +12,17 @@ export default {
         'bar-blue': '#0f3460',
         // Slightly elevated surface for nested cards / hover states
         'bar-surface': '#1d2b50',
+        // Lighter accent for text-only links on dark backgrounds — base bar-accent
+        // fails WCAG AA (4.5:1) as body text; keep bar-accent for filled buttons/badges
+        // where the fill itself provides contrast.
+        'bar-accent-light': '#fda4b5',
+        // Status swatch tones (icon + tinted background), so status reads via more
+        // than hue alone — used alongside existing color/shape/text cues.
+        'bar-danger-bg': '#3a1620',
+        'bar-warning': '#f0c94a',
+        'bar-warning-bg': '#2a2510',
+        'bar-success': '#5fd98a',
+        'bar-success-bg': '#122a1a',
       },
       spacing: {
         // Touch + notch / home-bar safe areas
