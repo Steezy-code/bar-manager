@@ -2,6 +2,11 @@
 
 A free, full‑featured restaurant management system built with React, Supabase, and deployable on Netlify.
 
+> 🍻 **Try it live, no setup required:** the app ships in **demo mode** by default — an in-memory mock stands
+> in for Supabase, seeded with realistic sample data, so `npm install && npm run dev` gives you the full app
+> (scheduling, inventory, checklists, admin/RBAC, backup restore) with nothing to configure. See
+> [Demo mode](#demo-mode) below. Point it at a real Supabase project only when you want persistence.
+
 > 📘 **User guide:** For a friendly, step‑by‑step guide tailored to bar managers and staff, see [BARMANAGER_USER_GUIDE.md](BARMANAGER_USER_GUIDE.md).
 
 ## 🚀 Features
@@ -18,7 +23,13 @@ A free, full‑featured restaurant management system built with React, Supabase,
 - **Protected routes** – each page requires a minimum role.
 - **Pending approval flow** – new users require admin approval before accessing the app.
 - **Supabase Auth** – email/password login, automatic profile creation via database trigger.
-- **Row‑Level Security (RLS)** – policies restrict data access to authenticated users.
+- **Row‑Level Security (RLS)** – every policy requires **both** an approved account status **and** the
+  right role (`supabase/migrations/20260612000000_require_approved_status.sql`). A user later set to
+  `pending`/`rejected`/`removed` loses database access immediately, even if their role row still says
+  manager/admin — the client route guards mirror this so the UI and the database enforce the same rule.
+- **Atomic backup restore** – restore runs server‑side in one transaction via a `SECURITY DEFINER` RPC
+  (`restore_operational_backup`, `supabase/migrations/20260612000100_restore_backup_rpc.sql`), so a
+  failed import can't leave the database half‑restored.
 
 ### 📅 Schedule Management
 - **Conflict detection** – prevents overlapping shifts for the same staff member.
@@ -45,7 +56,24 @@ A free, full‑featured restaurant management system built with React, Supabase,
 - **Touch‑friendly** – larger tap targets, swipe‑friendly calendar navigation.
 - **Optimized layouts** – stacked cards on mobile, grid on larger screens.
 
-## 📌 Recent Updates (2026‑04‑21)
+## 📌 Recent Updates (2026‑07‑02)
+
+- **Demo mode** – the app runs entirely on an in‑memory mock Supabase client by default
+  (`src/lib/supabaseMock.js`, seeded from `src/lib/demoData.js`), so it's explorable with zero backend setup.
+  Set `VITE_DEMO_MODE=false` to use a real Supabase project instead. A new landing page (`/`) introduces the
+  project; the app itself now lives under `/app`.
+- **Security hardening** – closed a gap where a `removed`/`rejected` account could keep database access if
+  its role row still said manager/admin; RLS now requires `status='approved'` on every policy, not just role.
+  Backup restore rewritten as an atomic RPC (see RBAC & Security above). Full findings in [FINDINGS.md](FINDINGS.md).
+- **Schedule correctness** – date construction now clamps to the real length of the target month (no more
+  invalid dates like `2026-02-31`), CSV import/export share one RFC‑style parser across Inventory and
+  Schedule, and "Build Month" snapshots the month before replacing it so a failed insert can't wipe it.
+- **Accessibility & mobile nav** – the mobile bottom nav no longer drops Settings/Admin (and Admin's
+  pending‑approvals badge) once a role has more than 4 nav items — they now live in a "More" sheet. Status
+  rows carry a tinted icon swatch instead of color alone, and text links were re‑checked against WCAG AA
+  contrast on their actual backgrounds.
+
+## 📌 Previous Updates (2026‑04‑21)
 
 The `feature/rbac‑login‑vibes` branch has been merged into `main`. All RBAC and Supabase features are now live, plus the following enhancements:
 
@@ -68,6 +96,23 @@ All changes are deployed and ready for use.
 - **Database:** Supabase (Free tier)
 - **Hosting:** Netlify (Free tier)
 - **Auth:** Supabase Auth
+
+## Demo mode
+
+```bash
+npm install
+npm run dev
+```
+
+That's it — no Supabase project, no `.env` file, no signup. `VITE_DEMO_MODE` defaults to on, which swaps the
+real Supabase client for `src/lib/supabaseMock.js`: an in‑memory client implementing the same `auth`/`from`/
+`rpc` surface the app actually calls, backed by plain arrays seeded from `src/lib/demoData.js`. The demo
+session is a pre‑approved admin, so every route and role‑gated feature is reachable. Writes (add a shift,
+toggle a checklist item, edit inventory) persist for the session and reset on reload; nothing reaches a
+network. `node scripts/check-mock.mjs` is a small self‑check for the mock's query builder.
+
+To connect a real project instead, set `VITE_DEMO_MODE=false` and fill in `VITE_SUPABASE_URL` /
+`VITE_SUPABASE_ANON_KEY` (copy `.env.example` to `.env`) — then follow the setup steps below.
 
 ## Setup Instructions
 
@@ -206,17 +251,21 @@ npm install
 ```
 src/
 ├── components/
-│   └── Layout.jsx               # Main layout with conditional Admin link
+│   └── Layout.jsx               # App shell for /app: nav, demo banner, welcome modal
 ├── lib/
-│   └── supabase.js              # Supabase client + table name constants
+│   ├── supabase.js              # Exports the real client or the demo mock, + table name constants
+│   ├── supabaseMock.js          # In-memory Supabase client used by demo mode
+│   ├── demoData.js              # Seed data for demo mode
+│   └── csv.js                   # Shared RFC-style CSV parser/escaper (Inventory + Schedule)
 ├── context/
 │   └── AuthContext.jsx          # Auth state, profile, role exposure
 ├── hooks/
 │   └── usePermissions.js        # RBAC logic (hasRole, hasAnyRole, etc.)
 ├── pages/
-│   ├── Login.jsx                # Sign‑in form
-│   ├── SignUp.jsx               # Sign‑up / request‑access form
-│   ├── PendingApproval.jsx      # Waiting screen for unapproved users
+│   ├── Landing.jsx              # Public landing page at "/"
+│   ├── Login.jsx                # Sign‑in form (kept but unrouted — App.jsx currently has no /login route)
+│   ├── SignUp.jsx               # Sign‑up / request‑access form (kept but unrouted, same as Login.jsx)
+│   ├── PendingApproval.jsx      # Waiting screen for unapproved users (kept but unrouted, same as Login.jsx)
 │   ├── Admin.jsx                # Admin panel – user list, role/status editing
 │   ├── Dashboard.jsx            # Home dashboard with low‑stock alerts
 │   ├── Inventory.jsx            # Inventory management (Supabase‑backed)
@@ -224,7 +273,7 @@ src/
 │   ├── Checklists.jsx           # Daily checklists (Supabase‑backed)
 │   ├── TimeOff.jsx              # Time‑off requests (Supabase‑backed)
 │   └── Settings.jsx             # Export/import for Supabase tables
-├── App.jsx                      # Router with ProtectedRoute & requiredRole guards
+├── App.jsx                      # Router: "/" is Landing, the app lives under "/app"
 ├── index.css                    # Global styles
 └── main.jsx                     # Entry point
 ```
@@ -253,11 +302,13 @@ supabase/migrations/
 ├── 20260408122200_add_rls_checklists.sql
 ├── 20260409230000_add_team_checklists.sql
 ├── 20260411020000_add_announcements.sql
-└── 20260421040000_add_removed_status.sql
+├── 20260421040000_add_removed_status.sql
+├── 20260612000000_require_approved_status.sql   # RLS: require status='approved' on every policy, not just role
+└── 20260612000100_restore_backup_rpc.sql        # Atomic, authorized restore_operational_backup() RPC
 ```
 
 Each migration is idempotent and safe to run multiple times. They ensure the database schema matches the frontend.
 
 ## License
 
-MIT - Free to use and modify!
+[MIT](LICENSE) — free to use and modify.
