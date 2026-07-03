@@ -238,7 +238,7 @@ export default function Dashboard() {
       icon: UserGroupIcon,
       title: `${pendingRequests.length} pending time off`,
       detail: pendingRequests.length ? 'Requests need review' : 'No requests waiting',
-      to: '/timeoff',
+      to: '/app/timeoff',
       actionLabel: 'Review',
       tone: pendingRequests.length ? 'warning' : 'success'
     },
@@ -246,7 +246,7 @@ export default function Dashboard() {
       icon: CubeIcon,
       title: `${lowItems.length} low-stock ${lowItems.length === 1 ? 'item' : 'items'}`,
       detail: lowItems.length ? lowItems.slice(0, 3).map(item => item.name).join(', ') : 'Inventory is above thresholds',
-      to: '/inventory',
+      to: '/app/inventory',
       actionLabel: 'Open',
       tone: lowItems.length ? 'danger' : 'success'
     },
@@ -254,7 +254,7 @@ export default function Dashboard() {
       icon: ClipboardDocumentCheckIcon,
       title: checklistStatus.total ? `${checklistRemaining} checklist tasks left` : 'No checklist tasks found',
       detail: checklistStatus.total ? `${checklistStatus.completed}/${checklistStatus.total} complete` : 'Open checklists to set today up',
-      to: '/checklists',
+      to: '/app/checklists',
       actionLabel: 'Check',
       tone: checklistRemaining ? 'warning' : 'success'
     },
@@ -262,7 +262,7 @@ export default function Dashboard() {
       icon: CalendarIcon,
       title: `${todayShifts.length} shifts today`,
       detail: todayShifts.length ? 'Schedule is ready to scan' : 'No shifts scheduled today',
-      to: '/schedule',
+      to: '/app/schedule',
       actionLabel: 'View',
       tone: todayShifts.length ? 'default' : 'warning'
     }
