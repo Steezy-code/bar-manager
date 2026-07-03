@@ -68,6 +68,7 @@ const mockScreens = [
   {
     key: 'dashboard',
     label: 'barmanager.app/app',
+    to: '/app',
     title: 'Dashboard',
     body: 'One glance at everything that needs attention today.',
     render: () => (
@@ -86,6 +87,7 @@ const mockScreens = [
   {
     key: 'schedule',
     label: 'barmanager.app/app/schedule',
+    to: '/app/schedule',
     title: 'Schedule',
     body: 'Build a month, spot conflicts, and see approved time off inline.',
     render: () => {
@@ -109,6 +111,7 @@ const mockScreens = [
   {
     key: 'inventory',
     label: 'barmanager.app/app/inventory',
+    to: '/app/inventory',
     title: 'Inventory',
     body: 'Low-stock items surface automatically against a per-item threshold.',
     render: () => (
@@ -130,6 +133,7 @@ const mockScreens = [
   {
     key: 'checklists',
     label: 'barmanager.app/app/checklists',
+    to: '/app/checklists',
     title: 'Checklists',
     body: 'Shared opening/closing/prep lists stamped with who and when.',
     render: () => (
@@ -154,122 +158,182 @@ const mockScreens = [
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-bar-dark text-white">
-      <div className="mx-auto max-w-5xl px-5 pb-16 sm:pb-24">
-        {/* Hero — kept tight so the primary CTA and a peek of the real UI both land
-            above the fold; text wordmark instead of an emoji reads more like a product. */}
-        <header className="pt-16 pb-10 text-center">
-          <h1 className="text-4xl font-bold sm:text-5xl">
-            Bar<span className="text-bar-accent">Manager</span>
-          </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-lg text-gray-300">
-            A role-based operations hub for a small bar or restaurant team — scheduling,
-            inventory, daily checklists, and time-off, all in one installable app.
+    // overflow-x-clip: the rotated hero collage and glow blobs intentionally bleed past
+    // the viewport edge; clip them instead of growing a horizontal scrollbar.
+    <div className="min-h-screen overflow-x-clip bg-bar-dark text-white">
+      {/* ============ Hero: asymmetric split — copy left, live-UI collage right ============ */}
+      <div className="relative">
+        {/* Ambient glows so the hero doesn't float in a flat void on wide screens */}
+        <div className="pointer-events-none absolute -top-32 right-[-10%] h-[480px] w-[480px] rounded-full bg-bar-accent/10 blur-3xl" />
+        <div className="pointer-events-none absolute left-[-15%] top-48 h-[420px] w-[420px] rounded-full bg-bar-blue/40 blur-3xl" />
+
+        <header className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10 lg:pb-24 lg:pt-24">
+          <div className="text-center lg:text-left">
+            <h1 className="text-4xl font-bold sm:text-5xl xl:text-6xl">
+              Bar<span className="text-bar-accent">Manager</span>
+            </h1>
+            <p className="mx-auto mt-5 max-w-2xl text-lg text-gray-300 lg:mx-0">
+              A role-based operations hub for a small bar or restaurant team — scheduling,
+              inventory, daily checklists, and time-off, all in one installable app.
+            </p>
+            <div className="mt-7 flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:justify-start">
+              <Link to="/app" className="btn-primary px-6 py-3 text-base">
+                Launch live demo <ArrowRightIcon className="h-5 w-5" />
+              </Link>
+              <a href={REPO_URL} target="_blank" rel="noreferrer" className="btn-ghost px-6 py-3 text-base">
+                View source
+              </a>
+            </div>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-2 lg:justify-start">
+              <Chip>React · Supabase · Tailwind</Chip>
+              <Chip>Installable PWA</Chip>
+            </div>
+          </div>
+
+          {/* Overlapping collage of two real demo screens. Reuses mockScreens directly so
+              the numbers shown here can never drift from the "How it works" section below. */}
+          <div className="relative mx-auto w-full max-w-md lg:max-w-none">
+            <div className="pointer-events-none absolute -right-6 -top-8 hidden w-4/5 rotate-3 opacity-60 sm:block">
+              <MockWindow label={mockScreens[1].label}>{mockScreens[1].render()}</MockWindow>
+            </div>
+            <div className="relative -rotate-1 transition-transform duration-300 hover:rotate-0">
+              <MockWindow label={mockScreens[0].label}>{mockScreens[0].render()}</MockWindow>
+            </div>
+            <p className="mt-4 text-center text-xs italic text-gray-500 lg:text-right">
+              Live UI from the demo — not a static mockup.
+            </p>
+          </div>
+        </header>
+      </div>
+
+      {/* ============ How it works: full-bleed band, zig-zag rows ============ */}
+      <section className="border-y border-bar-blue/30 bg-bar-card/30">
+        <div className="mx-auto max-w-6xl px-5 py-16 lg:py-20">
+          <h2 className="text-2xl font-bold sm:text-3xl">How it works</h2>
+          <p className="mt-2 max-w-xl text-sm text-gray-400">
+            A peek at the live demo. Every one of these is real, clickable UI — not a mockup.
           </p>
-          <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link to="/app" className="btn-primary px-6 py-3 text-base">
-              Launch live demo <ArrowRightIcon className="h-5 w-5" />
-            </Link>
-            <a href={REPO_URL} target="_blank" rel="noreferrer" className="btn-ghost px-6 py-3 text-base">
+          <div className="mt-12 space-y-16 lg:space-y-20">
+            {mockScreens.map(({ key, label, title, body, to, render: Render }, index) => {
+              const flipped = index % 2 === 1
+              return (
+                <div key={key} className="grid items-center gap-8 lg:grid-cols-2 lg:gap-14">
+                  <div className={flipped ? 'lg:order-2' : ''}>
+                    <MockWindow label={label}>
+                      <Render />
+                    </MockWindow>
+                  </div>
+                  <div className={flipped ? 'lg:order-1 lg:text-right' : ''}>
+                    <div aria-hidden="true" className="text-5xl font-bold leading-none text-bar-blue/70 sm:text-6xl">
+                      {String(index + 1).padStart(2, '0')}
+                    </div>
+                    <h3 className="mt-3 text-xl font-semibold">{title}</h3>
+                    <p className={`mt-2 max-w-md text-sm text-gray-400 ${flipped ? 'lg:ml-auto' : ''}`}>{body}</p>
+                    <Link
+                      to={to}
+                      className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-bar-accent-light hover:text-white"
+                    >
+                      Try it in the demo <ArrowRightIcon className="h-4 w-4" />
+                    </Link>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ============ What it does: bento grid (featured + slim strip) ============ */}
+      <section className="mx-auto max-w-6xl px-5 py-16 lg:py-20">
+        <h2 className="text-2xl font-bold sm:text-3xl">What it does</h2>
+        <p className="mt-2 max-w-xl text-sm text-gray-400">
+          Everything below is clickable in the demo — jump in and try it.
+        </p>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {features.map(({ icon: Icon, title, body }, index) => {
+            // Bento layout: first feature is the wide showcase card, the last one is a
+            // slim full-width horizontal strip; the rest are standard tiles.
+            const featured = index === 0
+            const strip = index === features.length - 1
+            if (strip) {
+              return (
+                <div
+                  key={title}
+                  className="card animate-fade-slide-up flex items-center gap-4 sm:col-span-2 lg:col-span-3"
+                  style={{ animationDelay: `${index * 60}ms` }}
+                >
+                  <Icon className="h-7 w-7 shrink-0 text-bar-accent" />
+                  <div>
+                    <h3 className="font-semibold">{title}</h3>
+                    <p className="mt-0.5 text-sm text-gray-400">{body}</p>
+                  </div>
+                </div>
+              )
+            }
+            return (
+              <div
+                key={title}
+                className={`card animate-fade-slide-up ${featured ? 'bg-gradient-to-br from-bar-card to-bar-blue/40 sm:col-span-2 sm:p-6' : ''}`}
+                style={{ animationDelay: `${index * 60}ms` }}
+              >
+                <Icon className={`mb-3 text-bar-accent ${featured ? 'h-9 w-9' : 'h-7 w-7'}`} />
+                <h3 className={featured ? 'text-lg font-semibold' : 'font-semibold'}>{title}</h3>
+                <p className={`mt-1 text-sm text-gray-400 ${featured ? 'max-w-lg' : ''}`}>{body}</p>
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
+      {/* ============ For developers: asymmetric two-column band ============ */}
+      <section className="border-y border-bar-blue/30 bg-bar-card/30">
+        <div className="mx-auto grid max-w-6xl gap-10 px-5 py-16 lg:grid-cols-[0.9fr_1.4fr] lg:gap-16 lg:py-20">
+          <div>
+            <h2 className="text-2xl font-bold sm:text-3xl">For developers</h2>
+            <p className="mt-3 text-sm text-gray-400">
+              Built to run entirely on free tiers (Supabase + Netlify). A few things under the hood:
+            </p>
+            <a href={REPO_URL} target="_blank" rel="noreferrer" className="btn-ghost mt-6 px-5 py-2.5">
               View source
             </a>
           </div>
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-            <Chip>React · Supabase · Tailwind</Chip>
-            <Chip>Installable PWA</Chip>
-          </div>
-        </header>
-
-        {/* Screenshot peek: a cropped preview of the real UI, teasing "How it works"
-            below without needing a scroll. Reuses mockScreens directly (rather than a
-            second hand-typed copy) so these numbers can never drift out of sync with
-            the full section further down. */}
-        <div className="relative -mt-2 mx-auto max-w-3xl overflow-hidden rounded-t-xl">
-          <div className="pointer-events-none grid max-h-[210px] gap-5 overflow-hidden sm:grid-cols-2">
-            {mockScreens.slice(0, 2).map(({ key, label, render: Render }) => (
-              <MockWindow key={key} label={label}>
-                <Render />
-              </MockWindow>
-            ))}
-          </div>
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-b from-transparent to-bar-dark" />
-          <p className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-xs italic text-gray-500">
-            ↓ real, clickable UI continues below the fold
-          </p>
-        </div>
-
-        {/* How it works — real screens, real seed data, no screenshots needed */}
-        <section className="mt-16">
-          <h2 className="text-center text-2xl font-bold">How it works</h2>
-          <p className="mx-auto mt-2 max-w-xl text-center text-sm text-gray-400">
-            A peek at the live demo. Every one of these is real, clickable UI — not a mockup.
-          </p>
-          <div className="mt-8 grid gap-5 sm:grid-cols-2">
-            {mockScreens.map(({ key, label, title, body, render: Render }) => (
-              <div key={key}>
-                <MockWindow label={label}>
-                  <Render />
-                </MockWindow>
-                <h3 className="mt-3 font-semibold">{title}</h3>
-                <p className="text-sm text-gray-400">{body}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* What it does */}
-        <section className="mt-20">
-          <h2 className="text-center text-2xl font-bold">What it does</h2>
-          <p className="mx-auto mt-2 max-w-xl text-center text-sm text-gray-400">
-            Everything below is clickable in the demo — jump in and try it.
-          </p>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map(({ icon: Icon, title, body }) => (
-              <div key={title} className="card">
-                <Icon className="mb-3 h-7 w-7 text-bar-accent" />
-                <h3 className="font-semibold">{title}</h3>
-                <p className="mt-1 text-sm text-gray-400">{body}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* For developers */}
-        <section className="mt-20">
-          <h2 className="text-2xl font-bold">For developers</h2>
-          <p className="mt-2 max-w-2xl text-sm text-gray-400">
-            Built to run entirely on free tiers (Supabase + Netlify). A few things under the hood:
-          </p>
-          <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+          <ul className="space-y-3">
             {devHighlights.map((line) => (
-              <li key={line} className="flex gap-3 rounded-lg bg-bar-card/60 p-4 text-sm text-gray-300">
-                <span className="mt-0.5 text-bar-accent">▹</span>
-                <span>{line}</span>
+              <li
+                key={line}
+                className="rounded-r-lg border-l-2 border-bar-accent/60 bg-bar-card/60 py-3 pl-4 pr-3 text-sm text-gray-300"
+              >
+                {line}
               </li>
             ))}
           </ul>
-        </section>
+        </div>
+      </section>
 
-        {/* Footer CTA */}
-        <section className="mt-20 rounded-2xl border border-bar-blue bg-bar-card p-8 text-center">
-          <h2 className="text-2xl font-bold">Take it for a spin</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm text-gray-400">
-            The demo signs you in as an admin on sample data — poke at anything, nothing is saved.
-          </p>
-          <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link to="/app" className="btn-primary px-6 py-3 text-base">
-              Launch live demo <ArrowRightIcon className="h-5 w-5" />
-            </Link>
-            <a href={REPO_URL} target="_blank" rel="noreferrer" className="btn-ghost px-6 py-3 text-base">
-              View source
-            </a>
+      {/* ============ Footer CTA ============ */}
+      <section className="mx-auto max-w-6xl px-5 py-16 lg:py-20">
+        <div className="relative overflow-hidden rounded-2xl border border-bar-blue bg-bar-card p-8 text-center sm:p-12">
+          <div className="pointer-events-none absolute -top-24 left-1/2 h-64 w-[32rem] -translate-x-1/2 rounded-full bg-bar-accent/15 blur-3xl" />
+          <div className="relative">
+            <h2 className="text-2xl font-bold sm:text-3xl">Take it for a spin</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm text-gray-400">
+              The demo signs you in as an admin on sample data — poke at anything, nothing is saved.
+            </p>
+            <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Link to="/app" className="btn-primary px-6 py-3 text-base">
+                Launch live demo <ArrowRightIcon className="h-5 w-5" />
+              </Link>
+              <a href={REPO_URL} target="_blank" rel="noreferrer" className="btn-ghost px-6 py-3 text-base">
+                View source
+              </a>
+            </div>
           </div>
-        </section>
+        </div>
 
-        <footer className="mt-12 text-center text-xs text-gray-600">
+        <footer className="mt-10 text-center text-xs text-gray-600">
           BarManager · a portfolio build · React + Supabase + Tailwind
         </footer>
-      </div>
+      </section>
     </div>
   )
 }
