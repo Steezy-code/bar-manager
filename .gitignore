@@ -32,3 +32,6 @@ coverage/
 *.local
 .cache
 .svelte-kit
+
+# Local-only audit notes — kept for reference, not published in the public repo
+FINDINGS.md
