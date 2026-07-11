@@ -1234,7 +1234,7 @@ export default function Schedule() {
           {/* DOW header */}
           <div className="grid grid-cols-7 gap-px">
             {weekDays.map(d => (
-              <div key={d} className="text-center text-xs font-semibold text-gray-500 py-1">{d}</div>
+              <div key={d} className="text-center text-xs font-semibold text-gray-400 py-1">{d}</div>
             ))}
           </div>
           {/* Compact calendar grid */}
@@ -1446,7 +1446,7 @@ export default function Schedule() {
                 <span className="text-gray-300">{builderShiftGroups.length} employees, {builderShifts.length} shifts</span>
                 <div className="flex gap-2">
                   <button onClick={expandAllBuilderGroups} className="text-bar-accent-light hover:text-white">Expand all</button>
-                  <span className="text-gray-600">/</span>
+                  <span className="text-gray-400">/</span>
                   <button onClick={collapseAllBuilderGroups} className="text-bar-accent-light hover:text-white">Collapse all</button>
                 </div>
               </div>
@@ -1487,10 +1487,10 @@ export default function Schedule() {
                       <div className="relative">
                       <div className="space-y-1.5 border-t border-bar-blue/30 p-2 overflow-x-auto">
                         <div className="grid grid-cols-[40px_1fr_auto_80px_32px] gap-1 px-1 min-w-[520px]">
-                          <span className="text-[10px] text-gray-500 font-semibold uppercase">Day</span>
-                          <span className="text-[10px] text-gray-500 font-semibold uppercase">Staff</span>
-                          <span className="text-[10px] text-gray-500 font-semibold uppercase">Time</span>
-                          <span className="text-[10px] text-gray-500 font-semibold uppercase">Role</span>
+                          <span className="text-[10px] text-gray-400 font-semibold uppercase">Day</span>
+                          <span className="text-[10px] text-gray-400 font-semibold uppercase">Staff</span>
+                          <span className="text-[10px] text-gray-400 font-semibold uppercase">Time</span>
+                          <span className="text-[10px] text-gray-400 font-semibold uppercase">Role</span>
                           <span />
                         </div>
                         {group.shifts.map(shift => (
@@ -1535,7 +1535,7 @@ export default function Schedule() {
                         value={shift.start}
                         onChange={e => updateShift(shift.id, 'start', e.target.value)}
                       />
-                      <span className="text-gray-500 text-xs">–</span>
+                      <span className="text-gray-400 text-xs">–</span>
                       <input
                         type="time"
                         className="input py-1 px-1 text-sm w-[88px]"

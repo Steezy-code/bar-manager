@@ -52,11 +52,11 @@ const normalizeText = (value) => String(value || '').trim().toLowerCase()
 const StatusPill = ({ children, tone = 'default' }) => {
   const toneClass =
     tone === 'danger'
-      ? 'bg-red-500/20 text-red-200'
+      ? 'bg-bar-danger-bg text-bar-accent-light'
       : tone === 'warning'
-        ? 'bg-yellow-500/20 text-yellow-100'
+        ? 'bg-bar-warning-bg text-bar-warning'
         : tone === 'success'
-          ? 'bg-green-500/20 text-green-200'
+          ? 'bg-bar-success-bg text-bar-success'
           : 'bg-bar-blue text-gray-200'
 
   return (

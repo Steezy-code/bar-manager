@@ -156,7 +156,7 @@ export default function Layout({ user, onLogout }) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{user.email}</p>
-                <p className="text-xs text-gray-500">Role: {profile?.role || 'viewer'} · {profile?.status || 'pending'}</p>
+                <p className="text-xs text-gray-400">Role: {profile?.role || 'viewer'} · {profile?.status || 'pending'}</p>
               </div>
             </div>
             <button
@@ -217,11 +217,11 @@ export default function Layout({ user, onLogout }) {
           </div>
         )}
         {mobilePrimary.map((item) => (
-          <NavLink key={item.path} to={item.path} end={item.path === '/app'} className={({ isActive }) => `flex flex-1 flex-col items-center justify-center gap-1 min-h-touch ${isActive ? 'text-bar-accent' : 'text-gray-500'}`}>
+          <NavLink key={item.path} to={item.path} end={item.path === '/app'} className={({ isActive }) => `flex flex-1 flex-col items-center justify-center gap-1 min-h-touch ${isActive ? 'text-bar-accent' : 'text-gray-400'}`}>
             <div className="relative">
               <item.icon className="w-5 h-5" />
               {navBadges[item.path] && (
-                <span className="absolute -top-1.5 -right-2 text-[9px] bg-red-500 text-white rounded-full px-1 leading-tight font-bold min-w-[14px] text-center">
+                <span className="absolute -top-1.5 -right-2 text-[9px] bg-bar-accent text-white rounded-full px-1 leading-tight font-bold min-w-[14px] text-center">
                   {navBadges[item.path]}
                 </span>
               )}
@@ -233,12 +233,12 @@ export default function Layout({ user, onLogout }) {
           <button
             type="button"
             onClick={() => setShowMore(true)}
-            className={`flex flex-1 flex-col items-center justify-center gap-1 min-h-touch ${mobileOverflow.some(isItemActive) ? 'text-bar-accent' : 'text-gray-500'}`}
+            className={`flex flex-1 flex-col items-center justify-center gap-1 min-h-touch ${mobileOverflow.some(isItemActive) ? 'text-bar-accent' : 'text-gray-400'}`}
           >
             <div className="relative">
               <EllipsisHorizontalIcon className="w-5 h-5" />
               {moreBadgeCount > 0 && (
-                <span className="absolute -top-1.5 -right-2 text-[9px] bg-red-500 text-white rounded-full px-1 leading-tight font-bold min-w-[14px] text-center">
+                <span className="absolute -top-1.5 -right-2 text-[9px] bg-bar-accent text-white rounded-full px-1 leading-tight font-bold min-w-[14px] text-center">
                   {moreBadgeCount}
                 </span>
               )}
