@@ -20,7 +20,7 @@ export default function DataCard({ title, subtitle, fields = [], actions }) {
         <dl className="grid grid-cols-2 gap-2 text-sm">
           {fields.map((f, i) => (
             <div key={i} className="min-w-0">
-              <dt className="text-xs uppercase tracking-wide text-gray-500">{f.label}</dt>
+              <dt className="text-xs uppercase tracking-wide text-gray-400">{f.label}</dt>
               <dd className="mt-0.5 truncate text-gray-200">{f.value}</dd>
             </div>
           ))}

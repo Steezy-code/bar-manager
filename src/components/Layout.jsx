@@ -156,7 +156,7 @@ export default function Layout({ user, onLogout }) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{user.email}</p>
-                <p className="text-xs text-gray-500">Role: {profile?.role || 'viewer'} · {profile?.status || 'pending'}</p>
+                <p className="text-xs text-gray-400">Role: {profile?.role || 'viewer'} · {profile?.status || 'pending'}</p>
               </div>
             </div>
             <button

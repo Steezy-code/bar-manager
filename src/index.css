@@ -202,7 +202,7 @@ input, select, textarea {
     @apply bg-bar-card rounded-xl p-4 border border-bar-blue;
   }
   .input, .select, .textarea {
-    @apply bg-bar-blue border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-bar-accent focus:outline-none w-full min-h-touch;
+    @apply bg-bar-blue border border-gray-600 rounded-lg px-4 py-2 text-white placeholder:text-gray-400 focus:border-bar-accent focus:outline-none w-full min-h-touch;
   }
   .field-label {
     @apply block text-sm font-medium text-gray-300 mb-1;
