@@ -169,7 +169,7 @@ export default function Landing() {
 
         <header className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10 lg:pb-24 lg:pt-24">
           <div className="text-center lg:text-left">
-            <h1 className="animate-fade-slide-up text-4xl font-bold sm:text-5xl xl:text-6xl">
+            <h1 className="animate-fade-slide-up text-4xl font-bold tracking-tight sm:text-5xl xl:text-6xl">
               Bar<span className="text-bar-accent">Manager</span>
             </h1>
             <p className="animate-fade-slide-up mx-auto mt-5 max-w-2xl text-lg text-gray-300 lg:mx-0" style={{ animationDelay: '80ms' }}>
@@ -196,7 +196,7 @@ export default function Landing() {
             <div className="pointer-events-none absolute -right-6 -top-8 hidden w-4/5 rotate-3 opacity-60 sm:block">
               <MockWindow label={mockScreens[1].label}>{mockScreens[1].render()}</MockWindow>
             </div>
-            <div className="relative -rotate-1 transition-transform duration-300 ease-[var(--ease-out)] hover:rotate-0">
+            <div className="relative -rotate-1 transition-transform duration-300 ease-[var(--ease-out)] [@media(hover:hover)_and_(pointer:fine)]:hover:rotate-0">
               <MockWindow label={mockScreens[0].label}>{mockScreens[0].render()}</MockWindow>
             </div>
             <p className="mt-4 text-center text-xs italic text-gray-500 lg:text-right">
