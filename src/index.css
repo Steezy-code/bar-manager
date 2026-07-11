@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Strong ease-out — the built-in CSS easings are too weak to feel intentional.
+     One token, reused by buttons, entrances, and hover so motion stays cohesive. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
 @keyframes toastIn {
   from { opacity: 0; transform: translateX(110%); }
   to   { opacity: 1; transform: translateX(0); }
@@ -170,7 +176,8 @@ input, select, textarea {
   /* Buttons — all share a 44px minimum tap target and a tactile press state.
      inline-flex + centering so an icon and label always align. */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 min-h-touch px-4 py-2 rounded-lg font-semibold transition select-none
+    @apply inline-flex items-center justify-center gap-2 min-h-touch px-4 py-2 rounded-lg font-semibold select-none
+      transition-[transform,background-color,border-color,color,box-shadow] duration-150 ease-[var(--ease-out)]
       active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none focus:outline-none focus-visible:ring-2 focus-visible:ring-bar-accent;
   }
   .btn-primary {
@@ -187,7 +194,8 @@ input, select, textarea {
   }
   /* 44x44 icon-only button — replaces the cramped `p-1` icon buttons app-wide. */
   .btn-icon {
-    @apply inline-flex items-center justify-center min-h-touch min-w-touch rounded-lg text-gray-300 transition
+    @apply inline-flex items-center justify-center min-h-touch min-w-touch rounded-lg text-gray-300
+      transition-[transform,background-color,color] duration-150 ease-[var(--ease-out)]
       hover:bg-bar-blue hover:text-white active:scale-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-bar-accent;
   }
   .card {
