@@ -79,7 +79,7 @@ const ActionRow = ({ icon: Icon, title, detail, to, actionLabel, tone = 'default
           : 'bg-bar-blue/40 text-bar-accent-light'
 
   return (
-    <div className="flex items-center gap-3 rounded-lg bg-bar-blue/30 p-3">
+    <div className="flex min-w-0 items-center gap-3 rounded-lg bg-bar-blue/30 p-3">
       <span className={`flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[7px] ${swatchClass}`}>
         <Icon className="h-4 w-4" />
       </span>
