@@ -62,10 +62,10 @@ export default {
       },
       animation: {
         shimmer:       'shimmer 1.4s ease infinite',
-        'toast-in':    'toastIn 0.25s ease-out',
+        'toast-in':    'toastIn 0.25s cubic-bezier(0.23, 1, 0.32, 1)',
         'quantity-pop':'quantityPop 0.35s ease-out',
         'check-pop':   'checkPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
-        'fade-slide-up': 'fadeSlideUp 0.4s ease-out both',
+        'fade-slide-up': 'fadeSlideUp 0.4s cubic-bezier(0.23, 1, 0.32, 1) both',
       },
     },
   },
